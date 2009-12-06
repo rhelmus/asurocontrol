@@ -32,10 +32,13 @@
 #define ASUROQT_H
 
 #include <QtGui/QMainWindow>
+#include <QTcpSocket>
 
 //#include "ui_asuroqt.h"
 
 class QPlainTextEdit;
+class QPushButton;
+class QTcpServer;
 
 class CIRIO; 
 
@@ -44,6 +47,10 @@ class asuroqt : public QMainWindow
     Q_OBJECT
 
     QPlainTextEdit *logWidget;
+    QTcpServer *tcpServer;
+    QTcpSocket *tcpSocket;
+    quint16 blockSize;
+    QPushButton *fortuneButton;
     CIRIO *IRIO;
     
     void createUI(void);
@@ -52,6 +59,10 @@ class asuroqt : public QMainWindow
     
 private slots:
 	void sendRC5(void);
+	void sendFortune(void);
+	void reqFortune(void);
+	void readFortune(void);
+	void displayError(QAbstractSocket::SocketError socketError);
 	
 public:
 	asuroqt(QWidget *parent = 0);
