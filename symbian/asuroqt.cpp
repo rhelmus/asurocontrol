@@ -31,10 +31,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QstatusBar>
 #include <QTabWidget>
+#include <QTcpServer>
 #include <QVBoxLayout>
 
 #include "asuroqt.h"
@@ -84,7 +86,27 @@ void asuroqt::createUI()
 	QStatusBar *statusbar = new QStatusBar(this);
 	setStatusBar(statusbar);
 	
+#if 0
+	tcpServer = new QTcpServer(this);
+	if (!tcpServer->listen(/*QHostAddress::LocalHost*/))
+	{
+		QMessageBox::critical(this, tr("Fortune Server"),
+				tr("Unable to start the server: %1.").arg(tcpServer->errorString()));
+		close();
+		return;
+	}
+	
+	connect(tcpServer, SIGNAL(newConnection()), this, SLOT(sendFortune()));
+#else
+	tcpSocket = new QTcpSocket(this);
+	connect(tcpSocket, SIGNAL(readyRead()), this, SLOT(readFortune()));
+	connect(tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)),
+	             this, SLOT(displayError(QAbstractSocket::SocketError)));
+	
+#endif
 	appendLogText("Started Asuro control.\n");
+	
+	//appendLogText(QString("Listening for connections on port %1:%2").arg(tcpServer->serverAddress().toString()).arg(tcpServer->serverPort()));
 }
 
 QWidget *asuroqt::createGeneralTab()
@@ -97,6 +119,9 @@ QWidget *asuroqt::createGeneralTab()
 	connect(button, SIGNAL(clicked()), this, SLOT(sendRC5()));
 	vbox->addWidget(button);
 	
+	fortuneButton = new QPushButton("Fortune");
+	connect(fortuneButton, SIGNAL(clicked()), this, SLOT(reqFortune()));
+	vbox->addWidget(fortuneButton);
 	
 	return ret;
 }
@@ -122,6 +147,91 @@ void asuroqt::sendRC5()
 {
 	IRIO->sendRC5(_L("11000000000100"));
 }
+
+void asuroqt::sendFortune()
+{
+	QStringList fortunes = QStringList() << tr("You've been leading a dog's life. Stay off the furniture.")
+			  << tr("You've got to think about tomorrow.")
+			  << tr("You will be surprised by a loud noise.")
+			  << tr("You will feel hungry again in another hour.")
+			  << tr("You might have mail.")
+			  << tr("You cannot kill time without injuring eternity.")
+			  << tr("Computers are not intelligent. They only think they are.");
+	 
+    QByteArray block;
+    QDataStream out(&block, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_4_0);
+    out << (quint16)0;
+    out << fortunes.at(qrand() % fortunes.size());
+    out.device()->seek(0);
+    out << (quint16)(block.size() - sizeof(quint16));
+
+    QTcpSocket *clientConnection = tcpServer->nextPendingConnection();
+    connect(clientConnection, SIGNAL(disconnected()),
+            clientConnection, SLOT(deleteLater()));
+
+    clientConnection->write(block);
+    clientConnection->disconnectFromHost();
+}
+
+void asuroqt::reqFortune()
+ {
+	fortuneButton->setEnabled(false);
+	blockSize = 0;
+	tcpSocket->abort();
+	tcpSocket->connectToHost("192.168.1.40", 40000);
+ }
+
+ void asuroqt::readFortune()
+ {
+	 appendLogText(QString("Ready read on %1:%2 - bytes: %3\n").arg(tcpSocket->peerAddress().toString())
+			 .arg(tcpSocket->peerPort()).arg(tcpSocket->bytesAvailable()));
+	 
+     QDataStream in(tcpSocket);
+     in.setVersion(QDataStream::Qt_4_0);
+
+     if (blockSize == 0) {
+         if (tcpSocket->bytesAvailable() < (int)sizeof(quint16))
+             return;
+
+         in >> blockSize;
+     }
+
+     if (tcpSocket->bytesAvailable() < blockSize)
+         return;
+
+     QString nextFortune;
+     in >> nextFortune;
+     appendLogText(nextFortune);
+     fortuneButton->setEnabled(true);
+ }
+
+ void asuroqt::displayError(QAbstractSocket::SocketError socketError)
+ {
+     switch (socketError) {
+     case QAbstractSocket::RemoteHostClosedError:
+         break;
+     case QAbstractSocket::HostNotFoundError:
+         QMessageBox::information(this, tr("Fortune Client"),
+                                  tr("The host was not found. Please check the "
+                                     "host name and port settings."));
+         break;
+     case QAbstractSocket::ConnectionRefusedError:
+         QMessageBox::information(this, tr("Fortune Client"),
+                                  tr("The connection was refused by the peer. "
+                                     "Make sure the fortune server is running, "
+                                     "and check that the host name and port "
+                                     "settings are correct."));
+         break;
+     default:
+         QMessageBox::information(this, tr("Fortune Client"),
+                                  tr("The following error occurred: %1.")
+                                  .arg(tcpSocket->errorString()));
+     }
+     
+     fortuneButton->setEnabled(true);
+ }
+
 
 void asuroqt::parseIRByte(char byte)
 {
