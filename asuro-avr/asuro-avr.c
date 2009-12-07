@@ -8,42 +8,61 @@
 
 #include "asuro.h"
 
-void sendIR(const char *text)
+void sendIRByte(unsigned char byte)
 {
     /* 1: Start
     * 2: Stop
     * 4: One
     * 5: Zero
+    * This is used to have a 'compatible' way of communicating with the e51
     */
-    
-    char *p = text;
+
     int i;
     
-    while (p && *p)
+    UartPutc('1');
+    
+    for (i=0; i<8; i++)
     {
-        UartPutc('1');
-        
-        for (i=0; i<8; i++)
-        {
-            if (*p & (1<<i))
-                UartPutc('4');
-            else
-                UartPutc('5');
-        }
-        
-        UartPutc('2');
-        p++;
-    }    
+        if (byte & (1<<i))
+            UartPutc('4');
+        else
+            UartPutc('5');
+    }
+    
+    UartPutc('2');
 }
 
-void SendSensors()
+void SendSensors(void)
 {
     // Switch
-    char sw[3];
-    sw[0] = 'S'; // S == msg for switch
-    sw[1] = PollSwitch(); // UNDONE: Call twice?
-    sw[2] = 0;
-    sendIR(sw);
+    sendIRByte('S'); // S == msg for switch
+    sendIRByte(PollSwitch() & PollSwitch()); // Use pollswitch twice
+    
+    // All sensor data is converted from 0..1023 to 0..255 to lessen IR IO
+    const int adcmax = 1023, sendmax = 255;
+    unsigned int adc[2];
+    
+    // Line sensors
+    LineData(adc);
+    sendIRByte('L'); // Line
+    sendIRByte(adc[0]*sendmax/adcmax);
+    sendIRByte(adc[1]*sendmax/adcmax);
+    
+    // Odo
+    OdometryData(adc);
+    sendIRByte('O'); // Odo
+    sendIRByte(adc[0]*sendmax/adcmax);
+    sendIRByte(adc[1]*sendmax/adcmax);
+    
+    // Battery
+    sendIRByte('B'); // Battery
+    sendIRByte(Battery()*sendmax/adcmax);
+    
+    SerPrint("Battery: ");
+    PrintInt(Battery());
+    SerPrint(" ");
+    PrintInt(Battery()*sendmax/adcmax);
+    SerPrint("\n");
 }
 
 int main(void)
