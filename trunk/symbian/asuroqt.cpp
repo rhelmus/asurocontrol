@@ -29,6 +29,7 @@
 ****************************************************************************/
 
 #include <QLabel>
+#include <QLCDNumber>
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -42,7 +43,7 @@
 #include "asuroqt.h"
 #include "CIRIO.h"
 
-asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent)
+asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
 	//ui.setupUi(this);
 	
@@ -76,6 +77,7 @@ void asuroqt::createUI()
 	QTabWidget *tabW = new QTabWidget;
 	tabW->addTab(createGeneralTab(), "General");
 	tabW->addTab(createLogTab(), "Log");
+	tabW->addTab(createDebugTab(), "Debug");
 	vbox->addWidget(tabW);
 	
 	QMenuBar *menubar = new QMenuBar(this);
@@ -115,13 +117,8 @@ QWidget *asuroqt::createGeneralTab()
 	
 	QVBoxLayout *vbox = new QVBoxLayout(ret);
 	
-	QPushButton *button = new QPushButton("Send RC5");
-	connect(button, SIGNAL(clicked()), this, SLOT(sendRC5()));
-	vbox->addWidget(button);
-	
-	fortuneButton = new QPushButton("Fortune");
-	connect(fortuneButton, SIGNAL(clicked()), this, SLOT(reqFortune()));
-	vbox->addWidget(fortuneButton);
+	vbox->addWidget(batteryLCD = new QLCDNumber);
+	vbox->addWidget(new QLineEdit);
 	
 	return ret;
 }
@@ -141,6 +138,28 @@ QWidget *asuroqt::createLogTab()
 	vbox->addWidget(clearB);
 	
 	return ret;	
+}
+
+QWidget *asuroqt::createDebugTab()
+{
+	QWidget *ret = new QWidget;
+	
+	QVBoxLayout *vbox = new QVBoxLayout(ret);
+	
+	QPushButton *button = new QPushButton("Send RC5");
+	connect(button, SIGNAL(clicked()), this, SLOT(sendRC5()));
+	vbox->addWidget(button);
+	
+	fortuneButton = new QPushButton("Fortune");
+	connect(fortuneButton, SIGNAL(clicked()), this, SLOT(reqFortune()));
+	vbox->addWidget(fortuneButton);
+	
+	return ret;
+}
+
+void asuroqt::setBattery(char bat)
+{
+	batteryLCD->display(bat);
 }
 
 void asuroqt::sendRC5()
@@ -235,5 +254,53 @@ void asuroqt::reqFortune()
 
 void asuroqt::parseIRByte(char byte)
 {
-	appendLogText(QChar(byte));
+	if (IRReceiveCode == IR_NONE)
+	{
+		switch (byte)
+		{
+		case 'S': IRReceiveCode = IR_SWITCH; break;
+		case 'L': IRReceiveCode = IR_LINE; break;
+		case 'O': IRReceiveCode = IR_ODO; break;
+		case 'B': IRReceiveCode = IR_BATTERY; break;
+		default: appendLogText(QString("Unrecognized code: %1\n").arg(byte)); break;
+		}
+		appendLogText(QString("Got code: %1\n").arg(QChar(byte)));
+	}
+	else
+	{
+		IRBytesReceived++;
+		
+		appendLogText(QString("Got byte: %1\n").arg(int(byte)));
+		
+		switch (IRReceiveCode)
+		{
+		case IR_SWITCH:
+			setSwitch(byte);
+			resetIRReceive();
+			break;
+		case IR_LINE:
+			if (IRBytesReceived == 1)
+				setLine(byte, SENSORT_LEFT);
+			else
+			{
+				setLine(byte, SENSOR_RIGHT);
+				resetIRReceive();
+			}
+			break;
+		case IR_ODO:
+			if (IRBytesReceived == 1)
+				setOdo(byte, SENSORT_LEFT);
+			else
+			{
+				setOdo(byte, SENSOR_RIGHT);
+				resetIRReceive();
+			}
+			break;
+		case IR_BATTERY:
+			setBattery(byte);
+			resetIRReceive();
+			break;
+		}
+	}
+	
 }

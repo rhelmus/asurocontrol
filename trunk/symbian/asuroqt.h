@@ -36,6 +36,7 @@
 
 //#include "ui_asuroqt.h"
 
+class QLCDNumber;
 class QPlainTextEdit;
 class QPushButton;
 class QTcpServer;
@@ -53,9 +54,23 @@ class asuroqt : public QMainWindow
     QPushButton *fortuneButton;
     CIRIO *IRIO;
     
+    enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
+    enum ESensorSide { SENSORT_LEFT, SENSOR_RIGHT };
+    
+    EIRReceiveCode IRReceiveCode;
+    int IRBytesReceived;
+    QLCDNumber *batteryLCD;
+    
     void createUI(void);
     QWidget *createGeneralTab(void);
     QWidget *createLogTab(void);
+    QWidget *createDebugTab(void);
+    
+    void resetIRReceive(void) { IRReceiveCode = IR_NONE; IRBytesReceived = 0; }
+    void setSwitch(char sw) { }
+    void setLine(char line, ESensorSide side) { }
+    void setOdo(char odo, ESensorSide side) { }
+    void setBattery(char bat);
     
 private slots:
 	void sendRC5(void);
