@@ -29,13 +29,13 @@
 ****************************************************************************/
 
 #include <QLabel>
-#include <QLCDNumber>
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QstatusBar>
+#include <QScrollArea>
+#include <QStatusBar>
 #include <QTabWidget>
 #include <QTcpServer>
 #include <QVBoxLayout>
@@ -113,13 +113,17 @@ void asuroqt::createUI()
 
 QWidget *asuroqt::createGeneralTab()
 {
-	QWidget *ret = new QWidget;
-	
+	QScrollArea *ret = new QScrollArea;
+	ret->setFrameStyle(QFrame::Box | QFrame::Plain);
+	ret->setWidgetResizable(true);
+
 	QVBoxLayout *vbox = new QVBoxLayout(ret);
 	
-	vbox->addWidget(batteryLCD = new QLCDNumber);
-	vbox->addWidget(new QLineEdit);
-	
+	vbox->addWidget(switchLabel = new QLabel);
+	vbox->addWidget(lineLabel = new QLabel);
+	vbox->addWidget(odoLabel = new QLabel);
+	vbox->addWidget(batteryLabel = new QLabel);
+		
 	return ret;
 }
 
@@ -157,9 +161,30 @@ QWidget *asuroqt::createDebugTab()
 	return ret;
 }
 
+void asuroqt::setSwitch(char sw)
+{
+	switchLabel->setText(QString("Switch: %1").arg((int)sw, 0, 2));
+}
+
+void asuroqt::setLine(char line, ESensorSide side)
+{
+	if (side == SENSOR_LEFT)
+		lineLabel->setText(QString("Line: %1").arg((int)line));
+	else
+		lineLabel->setText(lineLabel->text() + QString(", %1").arg((int)line));
+}
+
+void asuroqt::setOdo(char odo, ESensorSide side)
+{
+	if (side == SENSOR_LEFT)
+		odoLabel->setText(QString("Odo: %1").arg((int)odo));
+	else
+		odoLabel->setText(odoLabel->text() + QString(", %1").arg((int)odo));
+}
+
 void asuroqt::setBattery(char bat)
 {
-	batteryLCD->display(bat);
+	batteryLabel->setText(QString("Battery: %1").arg((int)bat));
 }
 
 void asuroqt::sendRC5()
@@ -280,7 +305,7 @@ void asuroqt::parseIRByte(char byte)
 			break;
 		case IR_LINE:
 			if (IRBytesReceived == 1)
-				setLine(byte, SENSORT_LEFT);
+				setLine(byte, SENSOR_LEFT);
 			else
 			{
 				setLine(byte, SENSOR_RIGHT);
@@ -289,7 +314,7 @@ void asuroqt::parseIRByte(char byte)
 			break;
 		case IR_ODO:
 			if (IRBytesReceived == 1)
-				setOdo(byte, SENSORT_LEFT);
+				setOdo(byte, SENSOR_LEFT);
 			else
 			{
 				setOdo(byte, SENSOR_RIGHT);
