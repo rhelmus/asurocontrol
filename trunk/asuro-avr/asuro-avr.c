@@ -39,7 +39,8 @@ void SendSensors(void)
     sendIRByte(PollSwitch() & PollSwitch()); // Use pollswitch twice
     
     // All sensor data is converted from 0..1023 to 0..255 to lessen IR IO
-    const int adcmax = 1023, sendmax = 255;
+    // long: conversion may give int overflows
+    const unsigned long adcmax = 1023, sendmax = 255;
     unsigned int adc[2];
     
     // Line sensors
@@ -56,13 +57,7 @@ void SendSensors(void)
     
     // Battery
     sendIRByte('B'); // Battery
-    sendIRByte(Battery()*sendmax/adcmax);
-    
-    SerPrint("Battery: ");
-    PrintInt(Battery());
-    SerPrint(" ");
-    PrintInt(Battery()*sendmax/adcmax);
-    SerPrint("\n");
+    sendIRByte(Battery()*sendmax/adcmax);    
 }
 
 int main(void)
