@@ -22,6 +22,7 @@
 #include <QtGui>
 
 #include "asuroqt.h"
+#include "sensorplot.h"
 
 asuroqt::asuroqt()
 {
@@ -29,11 +30,15 @@ asuroqt::asuroqt()
     setCentralWidget(cw);
 
     QVBoxLayout *vbox = new QVBoxLayout(cw);
+    vbox->addWidget(createSwitchWidget());
 
     QHBoxLayout *hbox = new QHBoxLayout;
     vbox->addLayout(hbox);
 
-    hbox->addWidget(createSwitchWidget());
+    hbox->addWidget(createLineWidget());
+    hbox->addWidget(createOdoWidget());
+
+    vbox->addWidget(createBatteryWidget());
 }
 
 asuroqt::~asuroqt()
@@ -42,12 +47,24 @@ asuroqt::~asuroqt()
 
 QWidget *asuroqt::createSwitchWidget()
 {
-    QFrame *ret = new QFrame;
-    ret->setFrameStyle(QFrame::Box | QFrame::Sunken);
+    QWidget *ret = new QWidget;
+    QHBoxLayout *mainhbox = new QHBoxLayout(ret);
+    
+    QFrame *frame = new QFrame;
+    frame->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    frame->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+    mainhbox->addWidget(frame);
 
-    QHBoxLayout *hbox = new QHBoxLayout(ret);
+    QVBoxLayout *vbox = new QVBoxLayout(frame);
+    
+    QLabel *label = new QLabel("<qt><h2>Touch sensors</h2>");
+    label->setAlignment(Qt::AlignCenter);
+    vbox->addWidget(label);
 
-    for (int i=0; i<8; i++)
+    QHBoxLayout *hbox = new QHBoxLayout;
+    vbox->addLayout(hbox);
+
+    for (int i=0; i<6; i++)
     {
         QCheckBox *check = new QCheckBox(QString::number(i));
         check->setEnabled(false);
@@ -55,7 +72,69 @@ QWidget *asuroqt::createSwitchWidget()
         hbox->addWidget(check);
     }
 
-    switchList.back()->setChecked(true);
+    return ret;
+}
+
+QWidget *asuroqt::createLineWidget()
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+
+    QHBoxLayout *hbox = new QHBoxLayout(ret);
+
+    CSensorPlot *plot = new CSensorPlot("Line sensors");
+    plot->addSensor("Left", Qt::red);
+    plot->addSensor("Right", Qt::yellow);
+
+    for (int i=0; i<3; i++)
+    {
+        plot->addData("Left", i, (float)i * 2.0);
+        plot->addData("Right", i, (float)i * 1.75);
+    }
     
+    hbox->addWidget(plot);
+
+    return ret;
+}
+
+QWidget *asuroqt::createOdoWidget()
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+
+    QHBoxLayout *hbox = new QHBoxLayout(ret);
+
+    CSensorPlot *plot = new CSensorPlot("Odo sensors");
+    plot->addSensor("Left", Qt::red);
+    plot->addSensor("Right", Qt::yellow);
+
+    for (int i=0; i<3; i++)
+    {
+        plot->addData("Left", i, (float)i * 2.0);
+        plot->addData("Right", i, (float)i * 1.75);
+    }
+    
+    hbox->addWidget(plot);
+
+    return ret;
+}
+
+QWidget *asuroqt::createBatteryWidget()
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+
+    QHBoxLayout *hbox = new QHBoxLayout(ret);
+
+    CSensorPlot *plot = new CSensorPlot("Battery");
+    plot->addSensor("Battery", Qt::red);
+
+    for (int i=0; i<3; i++)
+    {
+        plot->addData("Battery", i, (float)i * 2.0);
+    }
+    
+    hbox->addWidget(plot);
+
     return ret;
 }

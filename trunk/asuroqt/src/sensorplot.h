@@ -18,30 +18,37 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-
-#ifndef ASUROQT_H
-#define ASUROQT_H
-
+#include <map>
 #include <vector>
 
-#include <QMainWindow>
+#include <QWidget>
 
-class QCheckBox;
+class QLCDNumber;
+class QVBoxLayout;
 
-class asuroqt:public QMainWindow
+class QwtPlot;
+class QwtPlotCurve;
+
+class CSensorPlot: public QWidget
 {
-    Q_OBJECT
+    struct SSensor
+    {
+        QwtPlotCurve *sensorCurve;
+        QLCDNumber *LCD;
+        std::vector<double> xdata, ydata;
+        SSensor(QwtPlotCurve *c, QLCDNumber *l) : sensorCurve(c), LCD(l) { }
+        SSensor(void) : sensorCurve(0), LCD(0) { } // For stl
+    };
 
-    std::vector<QCheckBox *> switchList;
+    typedef std::map<std::string, SSensor> TSensorMap;
+    TSensorMap sensorMap;
 
-    QWidget *createSwitchWidget(void);
-    QWidget *createLineWidget(void);
-    QWidget *createOdoWidget(void);
-    QWidget *createBatteryWidget(void);
-    
+    QwtPlot *sensorPlot;
+    QVBoxLayout *LCDLayout;
+
 public:
-    asuroqt();
-    ~asuroqt();
-};
+    CSensorPlot(const QString &title, QWidget *parent = 0, Qt::WindowFlags f = 0);
 
-#endif
+    void addSensor(const std::string &name, const QColor &color=Qt::black);
+    void addData(const std::string &name, const double x, const double y);
+};
