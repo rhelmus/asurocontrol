@@ -199,7 +199,8 @@ void CIRIO::RunL()
 					if (readByte[i] == '1')
 						b |= (1<<i);
 				}
-				asuroUI->parseIRByte(b);
+				//asuroUI->parseIRByte(b);
+				asuroUI->IRByte(b);
 			}
 			Start();
 			break;
