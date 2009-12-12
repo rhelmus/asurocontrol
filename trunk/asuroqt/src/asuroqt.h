@@ -27,17 +27,30 @@
 #include <QMainWindow>
 
 class QCheckBox;
+class QSignalMapper;
+class QTcpServer;
+class QTcpSocket;
 
-class asuroqt:public QMainWindow
+class asuroqt: public QMainWindow
 {
     Q_OBJECT
 
     std::vector<QCheckBox *> switchList;
+    QTcpServer *tcpServer;
+    QTcpSocket *clientSocket;
+    QSignalMapper *disconnectMapper;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
     QWidget *createOdoWidget(void);
     QWidget *createBatteryWidget(void);
+
+    void setupServer(void);
+
+private slots:
+    void clientConnected(void);
+    void clientDisconnected(QObject *obj);
+    void clientHasData(void);
     
 public:
     asuroqt();

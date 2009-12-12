@@ -20,11 +20,12 @@
 
 
 #include <QtGui>
+#include <QtNetwork>
 
 #include "asuroqt.h"
 #include "sensorplot.h"
 
-asuroqt::asuroqt()
+asuroqt::asuroqt() : clientSocket(0)
 {
     QWidget *cw = new QWidget;
     setCentralWidget(cw);
@@ -137,4 +138,46 @@ QWidget *asuroqt::createBatteryWidget()
     hbox->addWidget(plot);
 
     return ret;
+}
+
+void asuroqt::setupServer()
+{
+    tcpServer = new QTcpServer(this);
+    if (!tcpServer->listen(QHostAddress::Any, 40000))
+    {
+        QMessageBox::critical(this, "Server error", QString("Failed to start server: %1\n").
+            arg(tcpServer->errorString()));
+        close();
+        return;
+    }
+
+    connect(tcpServer, SIGNAL(newConnection()), this, SLOT(clientConnected()));
+
+    disconnectMapper = new QSignalMapper(this);
+    connect(disconnectMapper, SIGNAL(mapped(const QObject *)), this,
+            SLOT(clientDisconnected(QObject *)));
+}
+
+void asuroqt::clientConnected()
+{
+    if (clientSocket)
+        clientSocket->disconnectFromHost();
+
+    clientSocket = tcpServer->nextPendingConnection();
+    connect(clientSocket, SIGNAL(disconnected()), disconnectMapper,
+            SLOT(map()));
+}
+
+void asuroqt::clientDisconnected(QObject *obj)
+{
+    // Current client?
+    if (clientSocket == obj)
+        clientSocket = 0;
+
+    obj->deleteLater();
+}
+
+void asuroqt::clientHasData()
+{
+    
 }
