@@ -31,14 +31,21 @@ class QSignalMapper;
 class QTcpServer;
 class QTcpSocket;
 
+class CSensorPlot;
+
 class asuroqt: public QMainWindow
 {
     Q_OBJECT
 
-    std::vector<QCheckBox *> switchList;
+    typedef std::vector<QCheckBox *> TSwitchList;
+    TSwitchList switchList;
+    
     QTcpServer *tcpServer;
     QTcpSocket *clientSocket;
     QSignalMapper *disconnectMapper;
+    quint16 tcpReadBlockSize;
+
+    CSensorPlot *linePlot, *odoPlot, *batteryPlot;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
@@ -46,6 +53,7 @@ class asuroqt: public QMainWindow
     QWidget *createBatteryWidget(void);
 
     void setupServer(void);
+    void parseTcpMsg(const QString &msg, quint16 data);
 
 private slots:
     void clientConnected(void);
