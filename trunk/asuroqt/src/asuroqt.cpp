@@ -25,7 +25,7 @@
 #include "asuroqt.h"
 #include "sensorplot.h"
 
-asuroqt::asuroqt() : clientSocket(0)
+asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
 {
     QWidget *cw = new QWidget;
     setCentralWidget(cw);
@@ -40,6 +40,8 @@ asuroqt::asuroqt() : clientSocket(0)
     hbox->addWidget(createOdoWidget());
 
     vbox->addWidget(createBatteryWidget());
+
+    setupServer();
 }
 
 asuroqt::~asuroqt()
@@ -65,7 +67,7 @@ QWidget *asuroqt::createSwitchWidget()
     QHBoxLayout *hbox = new QHBoxLayout;
     vbox->addLayout(hbox);
 
-    for (int i=0; i<6; i++)
+    for (int i=1; i<=6; i++)
     {
         QCheckBox *check = new QCheckBox(QString::number(i));
         check->setEnabled(false);
@@ -83,17 +85,11 @@ QWidget *asuroqt::createLineWidget()
 
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
-    CSensorPlot *plot = new CSensorPlot("Line sensors");
-    plot->addSensor("Left", Qt::red);
-    plot->addSensor("Right", Qt::yellow);
+    linePlot = new CSensorPlot("Line sensors");
+    linePlot->addSensor("Left", Qt::red);
+    linePlot->addSensor("Right", Qt::yellow);
 
-    for (int i=0; i<3; i++)
-    {
-        plot->addData("Left", i, (float)i * 2.0);
-        plot->addData("Right", i, (float)i * 1.75);
-    }
-    
-    hbox->addWidget(plot);
+    hbox->addWidget(linePlot);
 
     return ret;
 }
@@ -105,17 +101,11 @@ QWidget *asuroqt::createOdoWidget()
 
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
-    CSensorPlot *plot = new CSensorPlot("Odo sensors");
-    plot->addSensor("Left", Qt::red);
-    plot->addSensor("Right", Qt::yellow);
+    odoPlot = new CSensorPlot("Odo sensors");
+    odoPlot->addSensor("Left", Qt::red);
+    odoPlot->addSensor("Right", Qt::yellow);
 
-    for (int i=0; i<3; i++)
-    {
-        plot->addData("Left", i, (float)i * 2.0);
-        plot->addData("Right", i, (float)i * 1.75);
-    }
-    
-    hbox->addWidget(plot);
+    hbox->addWidget(odoPlot);
 
     return ret;
 }
@@ -127,15 +117,10 @@ QWidget *asuroqt::createBatteryWidget()
 
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
-    CSensorPlot *plot = new CSensorPlot("Battery");
-    plot->addSensor("Battery", Qt::red);
+    batteryPlot = new CSensorPlot("Battery");
+    batteryPlot->addSensor("Battery", Qt::red);
 
-    for (int i=0; i<3; i++)
-    {
-        plot->addData("Battery", i, (float)i * 2.0);
-    }
-    
-    hbox->addWidget(plot);
+    hbox->addWidget(batteryPlot);
 
     return ret;
 }
@@ -154,18 +139,42 @@ void asuroqt::setupServer()
     connect(tcpServer, SIGNAL(newConnection()), this, SLOT(clientConnected()));
 
     disconnectMapper = new QSignalMapper(this);
-    connect(disconnectMapper, SIGNAL(mapped(const QObject *)), this,
+    connect(disconnectMapper, SIGNAL(mapped(QObject *)), this,
             SLOT(clientDisconnected(QObject *)));
+}
+
+void asuroqt::parseTcpMsg(const QString &msg, quint16 data)
+{
+    if (msg == "switch")
+    {
+        for (int i=0; i<6; i++)
+        {
+            switchList[i]->setChecked((data & (1<<i)));
+        }
+    }
+    else if (msg == "linel")
+        linePlot->addData("Left", data);
+    else if (msg == "liner")
+        linePlot->addData("Right", data);
+    else if (msg == "odol")
+        odoPlot->addData("Left", data);
+    else if (msg == "odor")
+        odoPlot->addData("Right", data);
+    else if (msg == "battery")
+        batteryPlot->addData("Battery", data);
 }
 
 void asuroqt::clientConnected()
 {
+    qDebug("Client connected\n");
+    
     if (clientSocket)
         clientSocket->disconnectFromHost();
 
     clientSocket = tcpServer->nextPendingConnection();
     connect(clientSocket, SIGNAL(disconnected()), disconnectMapper,
             SLOT(map()));
+    connect(clientSocket, SIGNAL(readyRead()), this, SLOT(clientHasData()));
 }
 
 void asuroqt::clientDisconnected(QObject *obj)
@@ -179,5 +188,31 @@ void asuroqt::clientDisconnected(QObject *obj)
 
 void asuroqt::clientHasData()
 {
-    
+    qDebug() << "clientHasData: " << clientSocket->bytesAvailable() << "\n";
+    QDataStream in(clientSocket);
+    in.setVersion(QDataStream::Qt_4_5);
+
+    while (true)
+    {
+        if (tcpReadBlockSize == 0)
+        {
+            if (clientSocket->bytesAvailable() < (int)sizeof(quint16))
+                return;
+
+            in >> tcpReadBlockSize;
+        }
+
+        if (clientSocket->bytesAvailable() < tcpReadBlockSize)
+            return;
+
+        QString msg;
+        quint16 data;
+        in >> msg >> data;
+
+        parseTcpMsg(msg, data);
+        
+        qDebug() << QString("Received msg: %1=%2 (%3 bytes)\n").arg(msg).arg(data).arg(tcpReadBlockSize);
+
+        tcpReadBlockSize = 0;
+    }
 }

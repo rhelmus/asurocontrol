@@ -51,4 +51,5 @@ public:
 
     void addSensor(const std::string &name, const QColor &color=Qt::black);
     void addData(const std::string &name, const double x, const double y);
+    void addData(const std::string &name, const double y);
 };

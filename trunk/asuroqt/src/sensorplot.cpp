@@ -39,6 +39,10 @@ CSensorPlot::CSensorPlot(const QString &title, QWidget *parent,
     hbox->addWidget(sensorPlot = new QwtPlot(title));
     sensorPlot->setAxisTitle(QwtPlot::xBottom, "time");
     sensorPlot->setAxisTitle(QwtPlot::yLeft, "ADC");
+    //sensorPlot->setAxisScale(QwtPlot::yLeft, 0.0, 1000.0);
+    sensorPlot->setAxisMaxMajor(QwtPlot::yLeft, 5);
+    sensorPlot->updateAxes();
+//     sensorPlot->setAxisAutoScale(QwtPlot::yLeft);
     
     hbox->addLayout(LCDLayout = new QVBoxLayout);
 }
@@ -92,4 +96,9 @@ void CSensorPlot::addData(const std::string &name, const double x, const double 
     sensor.LCD->display(y);
 
     sensorPlot->replot();
+}
+
+void CSensorPlot::addData(const std::string &name, const double y)
+{
+    addData(name, sensorMap[name].xdata.size()+1, y);
 }
