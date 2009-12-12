@@ -28,6 +28,7 @@
 **
 ****************************************************************************/
 
+#include <QCoreApplication>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -37,7 +38,6 @@
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QTabWidget>
-#include <QTcpServer>
 #include <QVBoxLayout>
 
 #include "asuroqt.h"
@@ -45,10 +45,10 @@
 
 asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
-	//ui.setupUi(this);
-	
 	IRIO = CIRIO::NewL(this);
 	createUI();	
+	
+	connect(this, SIGNAL(gotIRByte(char)), this, SLOT(parseIRByte(char)));
 	
 	IRIO->Start();
 }
@@ -80,35 +80,23 @@ void asuroqt::createUI()
 	tabW->addTab(createDebugTab(), "Debug");
 	vbox->addWidget(tabW);
 	
-	QMenuBar *menubar = new QMenuBar(this);
-	menubar->setGeometry(QRect(0, 0, 800, 21));
-	setMenuBar(menubar);
+	QMenuBar *menuBar = new QMenuBar(this);
+	menuBar->setGeometry(QRect(0, 0, 800, 21));
+	setMenuBar(menuBar);
+	
+	connectAction = menuBar->addAction("Connect", this, SLOT(connectToServer()));
+	menuBar->addAction("Disconnect", this, SLOT(disonnectFromServer()));
 	
 	// UNDONE: Needed?
-	QStatusBar *statusbar = new QStatusBar(this);
-	setStatusBar(statusbar);
+	/*QStatusBar *statusbar = new QStatusBar(this);
+	setStatusBar(statusbar);*/
 	
-#if 0
-	tcpServer = new QTcpServer(this);
-	if (!tcpServer->listen(/*QHostAddress::LocalHost*/))
-	{
-		QMessageBox::critical(this, tr("Fortune Server"),
-				tr("Unable to start the server: %1.").arg(tcpServer->errorString()));
-		close();
-		return;
-	}
-	
-	connect(tcpServer, SIGNAL(newConnection()), this, SLOT(sendFortune()));
-#else
 	tcpSocket = new QTcpSocket(this);
-	connect(tcpSocket, SIGNAL(readyRead()), this, SLOT(readFortune()));
+	
 	connect(tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)),
-	             this, SLOT(displayError(QAbstractSocket::SocketError)));
+	        this, SLOT(socketError(QAbstractSocket::SocketError)));
 	
-#endif
 	appendLogText("Started Asuro control.\n");
-	
-	//appendLogText(QString("Listening for connections on port %1:%2").arg(tcpServer->serverAddress().toString()).arg(tcpServer->serverPort()));
 }
 
 QWidget *asuroqt::createGeneralTab()
@@ -154,37 +142,72 @@ QWidget *asuroqt::createDebugTab()
 	connect(button, SIGNAL(clicked()), this, SLOT(sendRC5()));
 	vbox->addWidget(button);
 	
-	fortuneButton = new QPushButton("Fortune");
-	connect(fortuneButton, SIGNAL(clicked()), this, SLOT(reqFortune()));
-	vbox->addWidget(fortuneButton);
-	
+	button = new QPushButton("Send TCP");
+	connect(button, SIGNAL(clicked()), this, SLOT(sendDummyData()));
+	vbox->addWidget(button);
+		
 	return ret;
 }
 
 void asuroqt::setSwitch(char sw)
 {
 	switchLabel->setText(QString("Switch: %1").arg((int)sw, 0, 2));
+	sendSensorData("switch", sw);
 }
 
 void asuroqt::setLine(char line, ESensorSide side)
 {
 	if (side == SENSOR_LEFT)
+	{
 		lineLabel->setText(QString("Line: %1").arg((int)line));
+		sendSensorData("linel", line);
+	}
 	else
+	{
 		lineLabel->setText(lineLabel->text() + QString(", %1").arg((int)line));
+		sendSensorData("liner", line);
+	}
 }
 
 void asuroqt::setOdo(char odo, ESensorSide side)
 {
 	if (side == SENSOR_LEFT)
+	{
 		odoLabel->setText(QString("Odo: %1").arg((int)odo));
+		sendSensorData("odol", odo);
+	}
 	else
+	{
 		odoLabel->setText(odoLabel->text() + QString(", %1").arg((int)odo));
+		sendSensorData("odor", odo);
+	}
 }
 
 void asuroqt::setBattery(char bat)
 {
 	batteryLabel->setText(QString("Battery: %1").arg((int)bat));
+	sendSensorData("battery", bat);
+}
+
+void asuroqt::sendSensorData(const QString &sensor, quint16 data)
+{
+	if (tcpSocket->state() != QTcpSocket::ConnectedState)
+	{
+		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
+		return;
+	}
+	
+	QByteArray block;
+	QDataStream out(&block, QIODevice::WriteOnly);
+	out.setVersion(QDataStream::Qt_4_5);
+
+	out << (quint16)0; // Size
+	out << sensor;
+	out << data;
+	out.device()->seek(0);
+	out << (quint16)(block.size() - sizeof(quint16));
+
+	tcpSocket->write(block);
 }
 
 void asuroqt::sendRC5()
@@ -192,90 +215,29 @@ void asuroqt::sendRC5()
 	IRIO->sendRC5(_L("11000000000100"));
 }
 
-void asuroqt::sendFortune()
+void asuroqt::connectToServer()
 {
-	QStringList fortunes = QStringList() << tr("You've been leading a dog's life. Stay off the furniture.")
-			  << tr("You've got to think about tomorrow.")
-			  << tr("You will be surprised by a loud noise.")
-			  << tr("You will feel hungry again in another hour.")
-			  << tr("You might have mail.")
-			  << tr("You cannot kill time without injuring eternity.")
-			  << tr("Computers are not intelligent. They only think they are.");
-	 
-    QByteArray block;
-    QDataStream out(&block, QIODevice::WriteOnly);
-    out.setVersion(QDataStream::Qt_4_0);
-    out << (quint16)0;
-    out << fortunes.at(qrand() % fortunes.size());
-    out.device()->seek(0);
-    out << (quint16)(block.size() - sizeof(quint16));
-
-    QTcpSocket *clientConnection = tcpServer->nextPendingConnection();
-    connect(clientConnection, SIGNAL(disconnected()),
-            clientConnection, SLOT(deleteLater()));
-
-    clientConnection->write(block);
-    clientConnection->disconnectFromHost();
-}
-
-void asuroqt::reqFortune()
- {
-	fortuneButton->setEnabled(false);
-	blockSize = 0;
+	connectAction->setEnabled(false);
 	tcpSocket->abort();
 	tcpSocket->connectToHost("192.168.1.40", 40000);
- }
+}
 
- void asuroqt::readFortune()
- {
-	 appendLogText(QString("Ready read on %1:%2 - bytes: %3\n").arg(tcpSocket->peerAddress().toString())
-			 .arg(tcpSocket->peerPort()).arg(tcpSocket->bytesAvailable()));
-	 
-     QDataStream in(tcpSocket);
-     in.setVersion(QDataStream::Qt_4_0);
+void asuroqt::disconnectFromServer()
+{
+	tcpSocket->abort();
+	connectAction->setEnabled(true);
+}
 
-     if (blockSize == 0) {
-         if (tcpSocket->bytesAvailable() < (int)sizeof(quint16))
-             return;
+void asuroqt::socketError(QAbstractSocket::SocketError socketError)
+{
+	appendLogText(QString("Socket error!: %1\n").arg(tcpSocket->errorString()));
+	connectAction->setEnabled(true);
+}
 
-         in >> blockSize;
-     }
-
-     if (tcpSocket->bytesAvailable() < blockSize)
-         return;
-
-     QString nextFortune;
-     in >> nextFortune;
-     appendLogText(nextFortune);
-     fortuneButton->setEnabled(true);
- }
-
- void asuroqt::displayError(QAbstractSocket::SocketError socketError)
- {
-     switch (socketError) {
-     case QAbstractSocket::RemoteHostClosedError:
-         break;
-     case QAbstractSocket::HostNotFoundError:
-         QMessageBox::information(this, tr("Fortune Client"),
-                                  tr("The host was not found. Please check the "
-                                     "host name and port settings."));
-         break;
-     case QAbstractSocket::ConnectionRefusedError:
-         QMessageBox::information(this, tr("Fortune Client"),
-                                  tr("The connection was refused by the peer. "
-                                     "Make sure the fortune server is running, "
-                                     "and check that the host name and port "
-                                     "settings are correct."));
-         break;
-     default:
-         QMessageBox::information(this, tr("Fortune Client"),
-                                  tr("The following error occurred: %1.")
-                                  .arg(tcpSocket->errorString()));
-     }
-     
-     fortuneButton->setEnabled(true);
- }
-
+void asuroqt::sendDummyData()
+{
+	sendSensorData("switch", 1);
+}
 
 void asuroqt::parseIRByte(char byte)
 {
@@ -287,15 +249,15 @@ void asuroqt::parseIRByte(char byte)
 		case 'L': IRReceiveCode = IR_LINE; break;
 		case 'O': IRReceiveCode = IR_ODO; break;
 		case 'B': IRReceiveCode = IR_BATTERY; break;
-		default: appendLogText(QString("Unrecognized code: %1\n").arg(byte)); break;
+		default: appendLogText(QString("Unrecognized code: %1\n").arg((int)byte)); break;
 		}
-		appendLogText(QString("Got code: %1\n").arg(QChar(byte)));
+//		appendLogText(QString("Got code: %1\n").arg(QChar(byte)));
 	}
 	else
 	{
 		IRBytesReceived++;
 		
-		appendLogText(QString("Got byte: %1\n").arg(int(byte)));
+//		appendLogText(QString("Got byte: %1\n").arg(int(byte)));
 		
 		switch (IRReceiveCode)
 		{
@@ -327,5 +289,4 @@ void asuroqt::parseIRByte(char byte)
 			break;
 		}
 	}
-	
 }

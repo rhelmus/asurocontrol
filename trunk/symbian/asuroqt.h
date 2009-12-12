@@ -34,12 +34,9 @@
 #include <QtGui/QMainWindow>
 #include <QTcpSocket>
 
-//#include "ui_asuroqt.h"
-
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
-class QTcpServer;
 
 class CIRIO; 
 
@@ -48,10 +45,8 @@ class asuroqt : public QMainWindow
     Q_OBJECT
 
     QPlainTextEdit *logWidget;
-    QTcpServer *tcpServer;
     QTcpSocket *tcpSocket;
-    quint16 blockSize;
-    QPushButton *fortuneButton;
+    QAction *connectAction;
     CIRIO *IRIO;
     
     enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
@@ -71,23 +66,25 @@ class asuroqt : public QMainWindow
     void setLine(char line, ESensorSide side);
     void setOdo(char odo, ESensorSide side);
     void setBattery(char bat);
+    void sendSensorData(const QString &sensor, quint16 data);
     
 private slots:
 	void sendRC5(void);
-	void sendFortune(void);
-	void reqFortune(void);
-	void readFortune(void);
-	void displayError(QAbstractSocket::SocketError socketError);
+	void connectToServer(void);
+	void disconnectFromServer(void);
+	void socketError(QAbstractSocket::SocketError socketError);
+	void sendDummyData(void);
+	void parseIRByte(char byte);
 	
 public:
 	asuroqt(QWidget *parent = 0);
     ~asuroqt();
     
     void appendLogText(const QString &text);
-    void parseIRByte(char byte);
-
-/*private:
-    Ui::asuroqtClass ui;*/
+    void IRByte(char byte) { emit(gotIRByte(byte)); }
+    
+signals:
+    void gotIRByte(char byte);
 };
 
 #endif // ASUROQT_H
