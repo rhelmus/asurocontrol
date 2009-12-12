@@ -12,3 +12,5 @@ INCLUDEPATH += /usr/include/qwt/
 
 LIBS += -lqwt
 
+QT += network
+
