@@ -37,11 +37,11 @@ void CIRIO::doRead()
 
 void CIRIO::doSendRC5(const TDesC &code)
 {
-	/*TCommConfig portSettings;
+	TCommConfig portSettings;
 	commPort.Config(portSettings);
 	portSettings().iRate = EBps115200;
 	portSettings().iDataBits = EData7;	
-	User::LeaveIfError(commPort.SetConfig(portSettings));*/
+	User::LeaveIfError(commPort.SetConfig(portSettings));
 
 	TBuf8<29> manchester; // HACK: Assume max is 29
 	const TInt len = code.Length();
@@ -67,7 +67,6 @@ void CIRIO::doSendRC5(const TDesC &code)
 		qs += manchester[i];
 	asuroUI->appendLogText("Send RC5(m): " + qs + "\n");
 	
-#if 1
 	int ind = 0;
 	QStringList sl;
 	TInt tperiod;
@@ -75,35 +74,12 @@ void CIRIO::doSendRC5(const TDesC &code)
 	HAL::Get(HALData::ENanoTickPeriod, tperiod);
 	
 	while(manchester[ind] != 'e')
-	{
-#if 0
-		if (manchester[ind] == '1' && manchester[ind+1] == '0')
-			User::After(889);
-		
-		if (manchester[ind] == '1' && manchester[ind+1] == '1')
-		{
-			User::After(1778);
-			ind++;
-		}
-		
-		if (manchester[ind] == '0' && manchester[ind+1] == '1')
-			shortBurst();
-		
-		if (manchester[ind] == '0' && manchester[ind+1] == '0')
-		{
-			longBurst();
-			ind++;
-		}
-		
-		if (manchester[ind] == '0' && manchester[ind+1] == 'e')
-			shortBurst();
-#endif
-		
+	{	
 		TUint32 ticks = User::NTickCount();
 		if (manchester[ind] == '0')
-			shortBurst();
+			burst();
 		else
-			User::AfterHighRes(9000);
+			User::AfterHighRes(9000); // +1000 for some reason?!?
 		
 		sl << QString::number((User::NTickCount()-ticks)*tperiod);
 				
@@ -111,39 +87,18 @@ void CIRIO::doSendRC5(const TDesC &code)
 	}
 	
 	asuroUI->appendLogText(QString("write times: %1\n").arg(sl.join(", ")));
-#else
 	
-	QStringList sl;
-	for (int i=0;i<len;i++)
-	{
-		TTime time;
-		time.HomeTime();
-		TInt64 curt = time.Int64();
-		
-		if (code[i] == '0')
-			longBurst();
-		else
-			shortBurst();
-		
-		TTime time2;
-		time2.HomeTime();
-		sl << QString::number(time2.Int64()-curt);
-		User::After(889);
-	}
-	
-	asuroUI->appendLogText(QString("write times: %1\n").arg(sl.join(", ")));
-#endif
-	/*commPort.Config(portSettings);
+	commPort.Config(portSettings);
 	portSettings().iRate = EBps2400;
 	portSettings().iDataBits = EData8;	
-	User::LeaveIfError(commPort.SetConfig(portSettings));*/
+	User::LeaveIfError(commPort.SetConfig(portSettings));
 }
 
-void CIRIO::burst(TInt amount)
+void CIRIO::burst()
 {
-	//TBuf8<22> buf; // HACK: 22 is max
-	TBuf8<320> buf;
-	for (int i=0;i<(amount*11);i++)
+	const int amount = 121; // This seem to give a 10 msec pulse
+	TBuf8<amount> buf;
+	for (int i=0; i<amount; i++)
 		buf.Append(pulseCode);
 	
 	TRequestStatus status;
@@ -185,9 +140,9 @@ void CIRIO::ConstructL()
 
 	TCommConfig portSettings;
 	commPort.Config(portSettings);
-	portSettings().iRate = /*EBps2400*/EBps115200; // UNDONE!!
+	portSettings().iRate = EBps2400;
 	portSettings().iParity = EParityNone;
-	portSettings().iDataBits = /*EData8*/EData7; // UNDONE!!
+	portSettings().iDataBits = EData8;
 	portSettings().iStopBits = EStop1;
 	portSettings().iSIREnable   = ESIREnable;
 	portSettings().iSIRSettings = KConfigSIRPulseWidthMaximum;

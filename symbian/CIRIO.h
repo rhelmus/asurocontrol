@@ -51,9 +51,7 @@ class CIRIO: public CActive
 	void doRead(void);
 	void doSendRC5(const TDesC &code);
 	
-	void burst(TInt amount);
-	void shortBurst(void) { burst(11); }
-	void longBurst(void) { burst(22); }
+	void burst(void);
 	
 protected:
 	CIRIO(asuroqt *owner);
