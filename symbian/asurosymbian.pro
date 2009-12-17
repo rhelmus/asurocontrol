@@ -14,7 +14,7 @@ SOURCES += CIRIO.cpp \
     asuroqt.cpp
 FORMS += asuroqt.ui
 RESOURCES += 
-MMP_RULES += "LIBRARY c32.lib bafl.lib"
+MMP_RULES += "LIBRARY c32.lib bafl.lib hal.lib"
 #symbian:TARGET.UID3 = 0xE5A258F1
 #symbian:TARGET.CAPABILITY="LocalServices NetworkServices UserEnvironment WriteUserData ReadUserData"
 

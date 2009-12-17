@@ -35,6 +35,7 @@
 #include <QTcpSocket>
 
 class QLabel;
+class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
 
@@ -48,6 +49,7 @@ class asuroqt : public QMainWindow
     QTcpSocket *tcpSocket;
     QAction *connectAction;
     CIRIO *IRIO;
+    QLineEdit *debugIRInput, *debugIRPulse;
     
     enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
     enum ESensorSide { SENSOR_LEFT, SENSOR_RIGHT };
@@ -69,7 +71,7 @@ class asuroqt : public QMainWindow
     void sendSensorData(const QString &sensor, quint16 data);
     
 private slots:
-	void sendRC5(void);
+	void sendDummyIR(void);
 	void connectToServer(void);
 	void disconnectFromServer(void);
 	void socketError(QAbstractSocket::SocketError socketError);
