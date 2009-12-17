@@ -138,14 +138,22 @@ QWidget *asuroqt::createDebugTab()
 	
 	QVBoxLayout *vbox = new QVBoxLayout(ret);
 	
+	vbox->addWidget(debugIRInput = new QLineEdit);
+	debugIRInput->setInputMask("BBBBBBBBBBBBBB");
+	debugIRInput->setText("11000000000100");
+	
+	vbox->addWidget(debugIRPulse = new QLineEdit);
+	debugIRPulse->setMaxLength(2);
+	debugIRPulse->setText("5B");
+	
 	QPushButton *button = new QPushButton("Send RC5");
-	connect(button, SIGNAL(clicked()), this, SLOT(sendRC5()));
+	connect(button, SIGNAL(clicked()), this, SLOT(sendDummyIR()));
 	vbox->addWidget(button);
 	
 	button = new QPushButton("Send TCP");
 	connect(button, SIGNAL(clicked()), this, SLOT(sendDummyData()));
 	vbox->addWidget(button);
-		
+
 	return ret;
 }
 
@@ -210,9 +218,15 @@ void asuroqt::sendSensorData(const QString &sensor, quint16 data)
 	tcpSocket->write(block);
 }
 
-void asuroqt::sendRC5()
+void asuroqt::sendDummyIR()
 {
-	IRIO->sendRC5(_L("11000000000100"));
+	//IRIO->sendIR(_L("11000000000100"));
+	//IRIO->sendIR(8, 130);
+	//IRIO->sendIR(6, 190);
+	//IRIO->sendIR(9, 175);
+	bool ok;
+	TBuf<20> code(debugIRInput->text().utf16());
+	IRIO->sendIR(code, (char)debugIRPulse->text().toShort(&ok, 16));
 }
 
 void asuroqt::connectToServer()

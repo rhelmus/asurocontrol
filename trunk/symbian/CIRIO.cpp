@@ -5,11 +5,16 @@
  *      Author: Rick
  */
 
+#include <e32std.h>
+#include <hal.h>
+#include <hal_data.h>
+
 #include "CIRIO.h"
 #include "asuroqt.h"
 #include "utils.h"
 
-CIRIO::CIRIO(asuroqt *owner) : CActive(CActive::EPriorityStandard), SIRState(SIR_IDLE), asuroUI(owner), writeQueue(10)
+CIRIO::CIRIO(asuroqt *owner) : CActive(CActive::EPriorityStandard), SIRState(SIR_IDLE), asuroUI(owner), writeQueue(10),
+							   pulseCode(0x5B)
 {
 	CActiveScheduler::Add(this);
 }
@@ -19,6 +24,7 @@ CIRIO::~CIRIO()
 	Cancel();
 	commPort.Close();
 	server.Close();
+	writeQueue.Reset();
 }
 
 void CIRIO::doRead()
@@ -31,15 +37,15 @@ void CIRIO::doRead()
 
 void CIRIO::doSendRC5(const TDesC &code)
 {
-	TCommConfig portSettings;
+	/*TCommConfig portSettings;
 	commPort.Config(portSettings);
 	portSettings().iRate = EBps115200;
 	portSettings().iDataBits = EData7;	
-	User::LeaveIfError(commPort.SetConfig(portSettings));
+	User::LeaveIfError(commPort.SetConfig(portSettings));*/
 
 	TBuf8<29> manchester; // HACK: Assume max is 29
 	const TInt len = code.Length();
-		
+	
 	for (TInt i=0; i<len; i++)
 	{
 		if (code[i] == '0')
@@ -55,10 +61,22 @@ void CIRIO::doSendRC5(const TDesC &code)
 	}
 	
 	manchester.Append('e');
+
+	QString qs;
+	for (int i=0;i<29;i++)
+		qs += manchester[i];
+	asuroUI->appendLogText("Send RC5(m): " + qs + "\n");
 	
+#if 1
 	int ind = 0;
+	QStringList sl;
+	TInt tperiod;
+	
+	HAL::Get(HALData::ENanoTickPeriod, tperiod);
+	
 	while(manchester[ind] != 'e')
 	{
+#if 0
 		if (manchester[ind] == '1' && manchester[ind+1] == '0')
 			User::After(889);
 		
@@ -79,21 +97,54 @@ void CIRIO::doSendRC5(const TDesC &code)
 		
 		if (manchester[ind] == '0' && manchester[ind+1] == 'e')
 			shortBurst();
+#endif
 		
+		TUint32 ticks = User::NTickCount();
+		if (manchester[ind] == '0')
+			shortBurst();
+		else
+			User::AfterHighRes(9000);
+		
+		sl << QString::number((User::NTickCount()-ticks)*tperiod);
+				
 		ind++;
 	}
 	
-	commPort.Config(portSettings);
+	asuroUI->appendLogText(QString("write times: %1\n").arg(sl.join(", ")));
+#else
+	
+	QStringList sl;
+	for (int i=0;i<len;i++)
+	{
+		TTime time;
+		time.HomeTime();
+		TInt64 curt = time.Int64();
+		
+		if (code[i] == '0')
+			longBurst();
+		else
+			shortBurst();
+		
+		TTime time2;
+		time2.HomeTime();
+		sl << QString::number(time2.Int64()-curt);
+		User::After(889);
+	}
+	
+	asuroUI->appendLogText(QString("write times: %1\n").arg(sl.join(", ")));
+#endif
+	/*commPort.Config(portSettings);
 	portSettings().iRate = EBps2400;
 	portSettings().iDataBits = EData8;	
-	User::LeaveIfError(commPort.SetConfig(portSettings));
+	User::LeaveIfError(commPort.SetConfig(portSettings));*/
 }
 
 void CIRIO::burst(TInt amount)
 {
-	TBuf8<22> buf; // HACK: 22 is max
-	for (int i=0;i<amount;i++)
-		buf.Append(0x5B);
+	//TBuf8<22> buf; // HACK: 22 is max
+	TBuf8<320> buf;
+	for (int i=0;i<(amount*11);i++)
+		buf.Append(pulseCode);
 	
 	TRequestStatus status;
 	commPort.Write(status, buf);
@@ -134,9 +185,9 @@ void CIRIO::ConstructL()
 
 	TCommConfig portSettings;
 	commPort.Config(portSettings);
-	portSettings().iRate = EBps2400;
+	portSettings().iRate = /*EBps2400*/EBps115200; // UNDONE!!
 	portSettings().iParity = EParityNone;
-	portSettings().iDataBits = EData8;
+	portSettings().iDataBits = /*EData8*/EData7; // UNDONE!!
 	portSettings().iStopBits = EStop1;
 	portSettings().iSIREnable   = ESIREnable;
 	portSettings().iSIRSettings = KConfigSIRPulseWidthMaximum;
@@ -165,8 +216,8 @@ void CIRIO::RunL()
 		if ((iStatus == KErrTimedOut) && writeQueue.Count())
 		{
 			doSendRC5(writeQueue[0]);
-			asuroUI->appendLogText("Send RC5: " + toQString(writeQueue[0]));
-			writeQueue.Delete(0);
+			asuroUI->appendLogText("Send RC5(1): " + toQString(writeQueue[0]) + "\n");
+			writeQueue.Remove(0);
 		}
 		
 		Start();			
@@ -236,7 +287,54 @@ void CIRIO::Start()
 	doRead();
 }
 
-void CIRIO::sendRC5(const TDesC &code)
+void CIRIO::sendIR(char cmd, char data)
 {
-	writeQueue.AppendL(code);
+	TBuf<14> bytecode;
+#if 0
+	// Command
+	for (int i=4; i>=0; i--)
+	{
+		if (cmd & (1<<i))
+			bytecode.Append('1');
+		else
+			bytecode.Append('0');
+	}
+	
+	// Data
+	for (int i=7; i>=0; i--)
+	{
+		if (data & (1<<i))
+			bytecode.Append('1');
+		else
+			bytecode.Append('0');
+	}
+	
+	// Start byte
+	bytecode.Append('1');
+#else
+	bytecode.Append('0');
+	bytecode.Append('1');
+	bytecode.Append('0');
+	bytecode.Append('0');
+	bytecode.Append('1');
+	bytecode.Append('1');
+	bytecode.Append('0');
+	bytecode.Append('1');
+	bytecode.Append('0');
+	bytecode.Append('1');
+	bytecode.Append('1');
+	bytecode.Append('1');
+	bytecode.Append('1');
+	bytecode.Append('0');
+#endif
+	
+	writeQueue.Append(bytecode);
+	//writeQueue.Append(_L("11000000010100"));
+	//writeQueue.Append(_L("01010000010101"));
+}
+
+void CIRIO::sendIR(const TDesC &code, char pulse)
+{
+	writeQueue.Append(code);
+	pulseCode = pulse;
 }

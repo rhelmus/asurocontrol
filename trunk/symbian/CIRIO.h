@@ -45,7 +45,8 @@ class CIRIO: public CActive
 	
 	TBuf8<1> readBuffer;
 	TBuf<8> readByte;
-	CDesCArraySeg writeQueue;
+	RArray<TBuf<14> > writeQueue;
+	char pulseCode;
 	
 	void doRead(void);
 	void doSendRC5(const TDesC &code);
@@ -66,7 +67,8 @@ public:
 	static CIRIO *NewLC(asuroqt *owner);
 	
 	void Start(void);
-	void sendRC5(const TDesC &code);
+	void sendIR(char cmd, char data);
+	void sendIR(const TDesC &code, char pulse);
 };
 
 #endif /* CIRIO_H_ */
