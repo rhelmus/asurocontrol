@@ -18,44 +18,45 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-
-#ifndef SENSORPLOT_H
-#define SENSORPLOT_H
+#ifndef CONTROLWIDGET_H
+#define CONTROLWIDGET_H
 
 #include <map>
-#include <vector>
 
 #include <QWidget>
 
-class QLCDNumber;
-class QVBoxLayout;
+class QIcon;
+class QPushButton;
 
-class QwtPlot;
-class QwtPlotCurve;
-
-class CSensorPlot: public QWidget
+class CControlWidget: public QWidget
 {
-    struct SSensor
-    {
-        QwtPlotCurve *sensorCurve;
-        QLCDNumber *LCD;
-        std::vector<double> xdata, ydata;
-        SSensor(QwtPlotCurve *c, QLCDNumber *l) : sensorCurve(c), LCD(l) { }
-        SSensor(void) : sensorCurve(0), LCD(0) { } // For stl
-    };
-
-    typedef std::map<std::string, SSensor> TSensorMap;
-    TSensorMap sensorMap;
-
-    QwtPlot *sensorPlot;
-    QVBoxLayout *LCDLayout;
+    Q_OBJECT
 
 public:
-    CSensorPlot(const QString &title, QWidget *parent = 0, Qt::WindowFlags f = 0);
+    enum EDirection { FORWARD, BACK, LEFT, RIGHT, NONE };
+    
+private:
+    typedef std::map<EDirection, QPushButton *> TButtonMap;
+    TButtonMap buttonMap;
 
-    void addSensor(const std::string &name, const QColor &color=Qt::black);
-    void addData(const std::string &name, const double x, const double y);
-    void addData(const std::string &name, const double y);
+    typedef std::map<EDirection, bool> TButtonPressMap;
+    TButtonPressMap buttonPressMap;
+
+    QPushButton *createControlButton(const QIcon &icon);
+    EDirection getDirFromKey(int key);
+    void updateDirections(void);
+            
+protected:
+    virtual void keyPressEvent(QKeyEvent *event);
+    virtual void keyReleaseEvent(QKeyEvent *event);
+    
+public:
+    CControlWidget(QWidget *parent = 0, Qt::WindowFlags f = 0);
+
+    bool directionPressed(EDirection dir) { return buttonPressMap[dir]; }
+
+signals:
+    void directionChanged(void);
 };
 
 #endif

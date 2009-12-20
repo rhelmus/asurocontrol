@@ -27,10 +27,16 @@
 #include <QMainWindow>
 
 class QCheckBox;
+class QIcon;
+class QKeyEvent;
 class QSignalMapper;
 class QTcpServer;
 class QTcpSocket;
 
+class QwtKnob;
+class QwtSlider;
+
+class CControlWidget;
 class CSensorPlot;
 
 class asuroqt: public QMainWindow
@@ -46,20 +52,31 @@ class asuroqt: public QMainWindow
     quint16 tcpReadBlockSize;
 
     CSensorPlot *linePlot, *odoPlot, *batteryPlot;
+    QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
+    CControlWidget *controlWidget;
+    QwtSlider *controlLSlider, *controlRSlider;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
     QWidget *createOdoWidget(void);
     QWidget *createBatteryWidget(void);
+    QWidget *createControlWidget(void);
+    QWidget *createMotorWidget(void);
+
+    QWidget *createKnob(const QString &title, QwtKnob *&knob);
+    QWidget *createSlider(const QString &title, QwtSlider *&slider);
 
     void setupServer(void);
-    void parseTcpMsg(const QString &msg, quint16 data);
+    void parseTcpMsg(const QString &msg, qint16 data);
+    void writeTcpMsg(const QString &msg, qint16 data);
 
 private slots:
     void clientConnected(void);
     void clientDisconnected(QObject *obj);
     void clientHasData(void);
-    
+    void controlAsuro(void);
+    void applyMotors(void);
+
 public:
     asuroqt();
     ~asuroqt();
