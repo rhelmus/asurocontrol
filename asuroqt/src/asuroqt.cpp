@@ -22,7 +22,11 @@
 #include <QtGui>
 #include <QtNetwork>
 
+#include <qwt_knob.h>
+#include <qwt_slider.h>
+
 #include "asuroqt.h"
+#include "controlwidget.h"
 #include "sensorplot.h"
 
 asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
@@ -31,16 +35,22 @@ asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
     setCentralWidget(cw);
 
     QVBoxLayout *vbox = new QVBoxLayout(cw);
+
     vbox->addWidget(createSwitchWidget());
 
-    QHBoxLayout *hbox = new QHBoxLayout;
-    vbox->addLayout(hbox);
+    QTabWidget *tabWidget = new QTabWidget;
+    vbox->addWidget(tabWidget);
 
-    hbox->addWidget(createLineWidget());
-    hbox->addWidget(createOdoWidget());
+    tabWidget->addTab(createLineWidget(), "Line sensors");
+    tabWidget->addTab(createOdoWidget(), "Odo sensors");
+    tabWidget->addTab(createBatteryWidget(), "Battery");
 
-    vbox->addWidget(createBatteryWidget());
+    tabWidget = new QTabWidget;
+    vbox->addWidget(tabWidget);
 
+    tabWidget->addTab(createControlWidget(), "Control");
+    tabWidget->addTab(createMotorWidget(), "Motor control");
+    
     setupServer();
 }
 
@@ -80,8 +90,7 @@ QWidget *asuroqt::createSwitchWidget()
 
 QWidget *asuroqt::createLineWidget()
 {
-    QFrame *ret = new QFrame;
-    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    QWidget *ret = new QWidget;
 
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
@@ -96,9 +105,8 @@ QWidget *asuroqt::createLineWidget()
 
 QWidget *asuroqt::createOdoWidget()
 {
-    QFrame *ret = new QFrame;
-    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
-
+    QWidget *ret = new QWidget;
+    
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
     odoPlot = new CSensorPlot("Odo sensors");
@@ -112,9 +120,8 @@ QWidget *asuroqt::createOdoWidget()
 
 QWidget *asuroqt::createBatteryWidget()
 {
-    QFrame *ret = new QFrame;
-    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
-
+    QWidget *ret = new QWidget;
+    
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
     batteryPlot = new CSensorPlot("Battery");
@@ -122,6 +129,83 @@ QWidget *asuroqt::createBatteryWidget()
 
     hbox->addWidget(batteryPlot);
 
+    return ret;
+}
+
+QWidget *asuroqt::createControlWidget()
+{
+    QWidget *ret = new QWidget;
+    
+    QHBoxLayout *mainhbox = new QHBoxLayout(ret);
+
+    mainhbox->addWidget(controlWidget = new CControlWidget);
+    connect(controlWidget, SIGNAL(directionChanged()), this, SLOT(controlAsuro()));
+    
+    mainhbox->addWidget(createKnob("<qt><strong>Speed</strong>", controlSpeedKnob));
+    
+    mainhbox->addWidget(createSlider("<qt><strong>Left</strong>", controlLSlider));
+    mainhbox->addWidget(createSlider("<qt><strong>Right</strong>", controlRSlider));
+
+    return ret;
+}
+
+QWidget *asuroqt::createMotorWidget()
+{
+    QWidget *ret = new QWidget;
+    
+    QHBoxLayout *hbox = new QHBoxLayout(ret);
+
+    QVBoxLayout *vbox = new QVBoxLayout;
+    hbox->addLayout(vbox);
+
+    hbox->addWidget(createKnob("<qt><strong>Left</strong>", leftMotorKnob));
+    hbox->addWidget(createKnob("<qt><strong>Right</strong>", rightMotorKnob));
+
+    QPushButton *applyB = new QPushButton("Apply");
+    applyB->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    connect(applyB, SIGNAL(clicked()), this, SLOT(applyMotors()));
+    hbox->addWidget(applyB);
+
+    return ret;
+}
+
+QWidget *asuroqt::createKnob(const QString &title, QwtKnob *&knob)
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
+    ret->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    QVBoxLayout *vbox = new QVBoxLayout(ret);
+
+    QLabel *label = new QLabel(title);
+    label->setAlignment(Qt::AlignCenter);
+    vbox->addWidget(label);
+
+    vbox->addWidget(knob = new QwtKnob);
+    knob->setScale(0.0, 255.0, 51.0);
+    knob->setRange(0.0, 255.0, 25.5);
+    knob->setTracking(false);
+    
+    return ret;
+}
+
+QWidget *asuroqt::createSlider(const QString &title, QwtSlider *&slider)
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
+    ret->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Minimum);
+
+    QVBoxLayout *vbox = new QVBoxLayout(ret);
+
+    QLabel *label = new QLabel(title);
+    label->setAlignment(Qt::AlignCenter);
+    vbox->addWidget(label);
+
+    vbox->addWidget(slider = new QwtSlider(0, Qt::Vertical, QwtSlider::LeftScale));
+    slider->setScale(-255.0, 255.0);
+    slider->setRange(-255.0, 255.0);
+    slider->setReadOnly(true);
+    
     return ret;
 }
 
@@ -143,7 +227,7 @@ void asuroqt::setupServer()
             SLOT(clientDisconnected(QObject *)));
 }
 
-void asuroqt::parseTcpMsg(const QString &msg, quint16 data)
+void asuroqt::parseTcpMsg(const QString &msg, qint16 data)
 {
     if (msg == "switch")
     {
@@ -162,6 +246,27 @@ void asuroqt::parseTcpMsg(const QString &msg, quint16 data)
         odoPlot->addData("Right", data);
     else if (msg == "battery")
         batteryPlot->addData("Battery", data);
+}
+
+void asuroqt::writeTcpMsg(const QString &msg, qint16 data)
+{
+    if (!clientSocket || (clientSocket->state() != QTcpSocket::ConnectedState))
+    {
+        qDebug("Cannot send data\n");
+        return;
+    }
+    
+    QByteArray block;
+    QDataStream out(&block, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_4_5);
+
+    out << (quint16)0; // Size
+    out << msg;
+    out << data;
+    out.device()->seek(0);
+    out << (quint16)(block.size() - sizeof(quint16));
+
+    clientSocket->write(block);
 }
 
 void asuroqt::clientConnected()
@@ -206,7 +311,7 @@ void asuroqt::clientHasData()
             return;
 
         QString msg;
-        quint16 data;
+        qint16 data;
         in >> msg >> data;
 
         parseTcpMsg(msg, data);
@@ -215,4 +320,51 @@ void asuroqt::clientHasData()
 
         tcpReadBlockSize = 0;
     }
+}
+
+void asuroqt::controlAsuro()
+{
+    const qint16 movespeed = static_cast<qint16>(controlSpeedKnob->value());
+    qint16 leftspeed = 0, rightspeed = 0;
+    const bool forward = controlWidget->directionPressed(CControlWidget::FORWARD);
+    const bool back = controlWidget->directionPressed(CControlWidget::BACK);
+    const bool left = controlWidget->directionPressed(CControlWidget::LEFT);
+    const bool right = controlWidget->directionPressed(CControlWidget::RIGHT);
+
+    if (forward && back)
+        ; // Reset speed
+    else if (forward)
+    {
+        if (left)
+            leftspeed = movespeed;
+        else if (right)
+            rightspeed = movespeed;
+        else // both or neither
+            leftspeed = rightspeed = movespeed;
+    }
+    else if (back)
+    {
+        if (left)
+            rightspeed = -movespeed;
+        else if (right)
+            leftspeed = -movespeed;
+        else // both or neither
+            leftspeed = rightspeed = -movespeed;
+    }
+
+    qDebug() << "Apply: " << leftspeed << ", " << rightspeed << " - " << forward << back << left << right << "\n";
+
+    controlLSlider->setValue(leftspeed);
+    controlRSlider->setValue(rightspeed);
+    
+    writeTcpMsg("leftm", leftspeed);
+    writeTcpMsg("rightm", rightspeed);
+}
+
+void asuroqt::applyMotors()
+{
+    qDebug() << "Apply: " << leftMotorKnob->value() << ", " << rightMotorKnob->value() << "\n";
+    
+    writeTcpMsg("leftm", static_cast<qint16>(leftMotorKnob->value()));
+    writeTcpMsg("rightm", static_cast<qint16>(rightMotorKnob->value()));
 }

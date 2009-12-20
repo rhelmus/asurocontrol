@@ -32,7 +32,7 @@ void sendIRByte(unsigned char byte)
     UartPutc('2');
 }
 
-void SendSensors(void)
+void sendSensors(void)
 {
     // Switch
     sendIRByte('S'); // S == msg for switch
@@ -60,7 +60,18 @@ void SendSensors(void)
     sendIRByte(Battery()*sendmax/adcmax);    
 }
 
-void ReadIR(void)
+void parseIR(char cmd, char val)
+{
+    if (cmd == 0) // Ping
+    {
+        StatusLED(GREEN);
+        sendIRByte('P');
+        Msleep(250);
+        StatusLED(RED);
+    }
+}
+
+void readIR(void)
 {
     if (PIND & (1<<PD0))
         return;
@@ -101,8 +112,10 @@ void ReadIR(void)
     SerPrint("\ndata: ");
     PrintInt(data);
     UartPutc('\n');
+
+    parseIR(cmd, data);
     
-    Msleep(500);
+    Msleep(50);
 }
 
 int main(void)
@@ -117,12 +130,12 @@ int main(void)
     {
         const unsigned long time = Gettime();
         
-        ReadIR();
+        readIR();
         
         if (time > datatime)
         {
             datatime = time + 500; // Every 0.5s
-            //SendSensors();
+            //sendSensors();
         }
         
 //         Msleep(100);
