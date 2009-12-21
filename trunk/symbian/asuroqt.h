@@ -47,6 +47,7 @@ class asuroqt : public QMainWindow
 
     QPlainTextEdit *logWidget;
     QTcpSocket *tcpSocket;
+    quint16 tcpReadBlockSize;
     QAction *connectAction;
     CIRIO *IRIO;
     QLineEdit *debugIRInput, *debugIRPulse;
@@ -64,29 +65,32 @@ class asuroqt : public QMainWindow
     QWidget *createDebugTab(void);
     
     void resetIRReceive(void) { IRReceiveCode = IR_NONE; IRBytesReceived = 0; }
-    void setSwitch(char sw);
-    void setLine(char line, ESensorSide side);
-    void setOdo(char odo, ESensorSide side);
-    void setBattery(char bat);
-    void sendSensorData(const QString &sensor, quint16 data);
+    void setSwitch(quint8 sw);
+    void setLine(quint8 line, ESensorSide side);
+    void setOdo(quint8 odo, ESensorSide side);
+    void setBattery(quint8 bat);
+    void sendSensorData(const QString &sensor, qint16 data);
+    void parseTcpMsg(const QString &msg, qint16 data);
     
 private slots:
 	void sendDummyIR(void);
 	void connectToServer(void);
 	void disconnectFromServer(void);
+	void serverHasData(void);
 	void socketError(QAbstractSocket::SocketError socketError);
 	void sendDummyData(void);
-	void parseIRByte(char byte);
+	void parseIRByte(quint8 byte);
+	void sendIRPing(void);
 	
 public:
 	asuroqt(QWidget *parent = 0);
     ~asuroqt();
     
     void appendLogText(const QString &text);
-    void IRByte(char byte) { emit(gotIRByte(byte)); }
+    void IRByte(quint8 byte) { emit(gotIRByte(byte)); }
     
 signals:
-    void gotIRByte(char byte);
+    void gotIRByte(quint8 byte);
 };
 
 #endif // ASUROQT_H

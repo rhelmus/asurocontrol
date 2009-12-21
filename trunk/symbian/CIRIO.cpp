@@ -62,10 +62,10 @@ void CIRIO::doSendRC5(const TDesC &code)
 	
 	manchester.Append('e');
 
-	QString qs;
+	/*QString qs;
 	for (int i=0;i<29;i++)
 		qs += manchester[i];
-	asuroUI->appendLogText("Send RC5(m): " + qs + "\n");
+	asuroUI->appendLogText("Send RC5(m): " + qs + "\n");*/
 	
 	int ind = 0;
 	QStringList sl;
@@ -86,7 +86,7 @@ void CIRIO::doSendRC5(const TDesC &code)
 		ind++;
 	}
 	
-	asuroUI->appendLogText(QString("write times: %1\n").arg(sl.join(", ")));
+	//asuroUI->appendLogText(QString("write times: %1\n").arg(sl.join(", ")));
 	
 	commPort.Config(portSettings);
 	portSettings().iRate = EBps2400;
@@ -171,7 +171,7 @@ void CIRIO::RunL()
 		if ((iStatus == KErrTimedOut) && writeQueue.Count())
 		{
 			doSendRC5(writeQueue[0]);
-			asuroUI->appendLogText("Send RC5(1): " + toQString(writeQueue[0]) + "\n");
+			//asuroUI->appendLogText("Send RC5(1): " + toQString(writeQueue[0]) + "\n");
 			writeQueue.Remove(0);
 		}
 		
@@ -199,7 +199,7 @@ void CIRIO::RunL()
 			{
 				//asuroUI->appendLogText("Read byte: " + toQString(readByte));
 				// Convert to real byte
-				char b = 0;
+				unsigned char b = 0;
 				for (int i=0; i<8; i++)
 				{
 					if (readByte[i] == '1')
@@ -242,10 +242,13 @@ void CIRIO::Start()
 	doRead();
 }
 
-void CIRIO::sendIR(char cmd, char data)
+void CIRIO::sendIR(unsigned char cmd, unsigned char data)
 {
 	TBuf<14> bytecode;
-#if 0
+	
+	// Start byte
+	bytecode.Append('1');	
+
 	// Command
 	for (int i=4; i>=0; i--)
 	{
@@ -264,28 +267,7 @@ void CIRIO::sendIR(char cmd, char data)
 			bytecode.Append('0');
 	}
 	
-	// Start byte
-	bytecode.Append('1');
-#else
-	bytecode.Append('0');
-	bytecode.Append('1');
-	bytecode.Append('0');
-	bytecode.Append('0');
-	bytecode.Append('1');
-	bytecode.Append('1');
-	bytecode.Append('0');
-	bytecode.Append('1');
-	bytecode.Append('0');
-	bytecode.Append('1');
-	bytecode.Append('1');
-	bytecode.Append('1');
-	bytecode.Append('1');
-	bytecode.Append('0');
-#endif
-	
 	writeQueue.Append(bytecode);
-	//writeQueue.Append(_L("11000000010100"));
-	//writeQueue.Append(_L("01010000010101"));
 }
 
 void CIRIO::sendIR(const TDesC &code, char pulse)
