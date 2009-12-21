@@ -6,7 +6,44 @@
  *   any later version.                                                    *
  ***************************************************************************/
 
+#include "../shared/shared.h"
 #include "asuro.h"
+
+static struct
+{
+    unsigned long lastUpdate;
+    int8_t motorPower[2];
+    int8_t sleepMode; // Set when waiting no status update for a while
+} asuroInfo;
+
+// Own version of SetMotorPower: FREE instead of BREAK at 0 speed
+void setMotorSpeed(int8_t left, int8_t right)
+{
+    int8_t ldir, rdir;
+    
+    if (left == 0)
+        ldir = FREE;
+    else if (left < 0)
+    {
+        ldir = RWD;
+        left = -left;
+    }
+    else
+        ldir = FWD;
+    
+    if (right == 0)
+        rdir = FREE;
+    else if (right < 0)
+    {
+        right = -right;
+        rdir = RWD;
+    }
+    else
+        rdir = FWD;
+    
+    MotorDir(ldir, rdir);
+    MotorSpeed(left * 2, right * 2);
+}
 
 void sendIRByte(unsigned char byte)
 {
@@ -17,7 +54,7 @@ void sendIRByte(unsigned char byte)
     * This is used to have a 'compatible' way of communicating with the e51
     */
 
-    int i;
+    int8_t i;
     
     UartPutc('1');
     
@@ -62,12 +99,27 @@ void sendSensors(void)
 
 void parseIR(char cmd, char val)
 {
-    if (cmd == 0) // Ping
+    if (cmd == CMD_UPDATE)
     {
         StatusLED(GREEN);
-        sendIRByte('P');
-        Msleep(250);
+        asuroInfo.lastUpdate = Gettime();
+        sendSensors();
+        Msleep(150);
         StatusLED(RED);
+        
+        if (asuroInfo.sleepMode)
+        {
+            asuroInfo.sleepMode = FALSE;
+            setMotorSpeed(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
+        }
+    }
+    else if (cmd == CMD_SPEEDL)
+        asuroInfo.motorPower[0] = (int8_t)val;
+    else if (cmd == CMD_SPEEDR)
+    {
+        // NOTE: Motor is currently only set with right speed cmd
+        asuroInfo.motorPower[1] = (int8_t)val;
+        setMotorSpeed(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
     }
 }
 
@@ -76,14 +128,15 @@ void readIR(void)
     if (PIND & (1<<PD0))
         return;
     
-    int i;
+    int8_t i;
     unsigned char datastr[13], irstat, cmd = 0, data = 0;
+    unsigned long time;
     
     /* Read manchester data:
      * First 5 bits: cmd type
      * Remaining 8 bits: value
      */
-
+   
     for (i=0; i<13; i++)
     {
         // Longer timing than regular RC5: Symbian doesn't seem to provide enough accuracy
@@ -101,17 +154,22 @@ void readIR(void)
         else
             datastr[i] = '0';
         
+        time = Gettime();
         while (irstat == (PIND & (1<<PD0)))
-            ;
+        {
+            if ((Gettime()-time) > 50) // Timeout! --> abort
+                return;
+            Sleep(150);
+        }
     }
     
-    SerPrint("Received IR data: ");
-    SerWrite(datastr, 13);
-    SerPrint("\ncmd: ");
-    PrintInt(cmd);
-    SerPrint("\ndata: ");
-    PrintInt(data);
-    UartPutc('\n');
+//     SerPrint("Received IR data: ");
+//     SerWrite(datastr, 13);
+//     SerPrint("\ncmd: ");
+//     PrintInt(cmd);
+//     SerPrint("\ndata: ");
+//     PrintInt(data);
+//     UartPutc('\n');
 
     parseIR(cmd, data);
     
@@ -125,20 +183,37 @@ int main(void)
     StatusLED(RED);
     BackLED(OFF, OFF);
     
-    unsigned long datatime = 0;
+    asuroInfo.lastUpdate = 0;
+    asuroInfo.motorPower[0] = asuroInfo.motorPower[1] = 0;
+    
+    unsigned long timediff;
     while (1)
     {
-        const unsigned long time = Gettime();
-        
         readIR();
         
-        if (time > datatime)
+        if (!asuroInfo.sleepMode &&
+            (asuroInfo.motorPower[0] || asuroInfo.motorPower[1]))
         {
-            datatime = time + 500; // Every 0.5s
-            //sendSensors();
+            timediff = (Gettime() - asuroInfo.lastUpdate);
+            
+            if (timediff > 40000) // No contact for over 40s
+            {
+                setMotorSpeed(0, 0);
+                asuroInfo.motorPower[0] = asuroInfo.motorPower[1] = 0;
+            }
+            else if (timediff > 5000)
+            {
+                asuroInfo.sleepMode = TRUE;
+                setMotorSpeed(0, 0); // Suspend till we get another update
+                Msleep(500); // Wait a little to regain power
+            }
+    //         else if (Battery() < 700) // Battery low?
+    //         {
+    //             setMotorSpeed(0, 0);
+    //             Msleep(250); // Be idle for a while
+    //             setMotorSpeed(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
+    //         }
         }
-        
-//         Msleep(100);
     }
     
     return 0;
