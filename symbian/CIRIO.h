@@ -65,7 +65,7 @@ public:
 	static CIRIO *NewLC(asuroqt *owner);
 	
 	void Start(void);
-	void sendIR(char cmd, char data);
+	void sendIR(unsigned char cmd, unsigned char data);
 	void sendIR(const TDesC &code, char pulse);
 };
 

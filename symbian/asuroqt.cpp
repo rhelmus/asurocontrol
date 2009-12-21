@@ -38,17 +38,23 @@
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
+#include "../shared/shared.h"
 #include "asuroqt.h"
 #include "CIRIO.h"
 
-asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), IRReceiveCode(IR_NONE), IRBytesReceived(0)
+asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
 	IRIO = CIRIO::NewL(this);
 	createUI();	
 	
-	connect(this, SIGNAL(gotIRByte(char)), this, SLOT(parseIRByte(char)));
+	connect(this, SIGNAL(gotIRByte(quint8)), this, SLOT(parseIRByte(quint8)));
+	
+	QTimer *irtimer = new QTimer(this);
+	connect(irtimer, SIGNAL(timeout()), this, SLOT(sendIRPing()));
+	irtimer->start(1500);
 	
 	IRIO->Start();
 }
@@ -93,6 +99,7 @@ void asuroqt::createUI()
 	
 	tcpSocket = new QTcpSocket(this);
 	
+	connect(tcpSocket, SIGNAL(readyRead()), this, SLOT(serverHasData()));
 	connect(tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)),
 	        this, SLOT(socketError(QAbstractSocket::SocketError)));
 	
@@ -157,13 +164,13 @@ QWidget *asuroqt::createDebugTab()
 	return ret;
 }
 
-void asuroqt::setSwitch(char sw)
+void asuroqt::setSwitch(quint8 sw)
 {
 	switchLabel->setText(QString("Switch: %1").arg((int)sw, 0, 2));
 	sendSensorData("switch", sw);
 }
 
-void asuroqt::setLine(char line, ESensorSide side)
+void asuroqt::setLine(quint8 line, ESensorSide side)
 {
 	if (side == SENSOR_LEFT)
 	{
@@ -177,7 +184,7 @@ void asuroqt::setLine(char line, ESensorSide side)
 	}
 }
 
-void asuroqt::setOdo(char odo, ESensorSide side)
+void asuroqt::setOdo(quint8 odo, ESensorSide side)
 {
 	if (side == SENSOR_LEFT)
 	{
@@ -191,17 +198,17 @@ void asuroqt::setOdo(char odo, ESensorSide side)
 	}
 }
 
-void asuroqt::setBattery(char bat)
+void asuroqt::setBattery(quint8 bat)
 {
 	batteryLabel->setText(QString("Battery: %1").arg((int)bat));
 	sendSensorData("battery", bat);
 }
 
-void asuroqt::sendSensorData(const QString &sensor, quint16 data)
+void asuroqt::sendSensorData(const QString &sensor, qint16 data)
 {
 	if (tcpSocket->state() != QTcpSocket::ConnectedState)
 	{
-		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
+//		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
 		return;
 	}
 	
@@ -218,6 +225,24 @@ void asuroqt::sendSensorData(const QString &sensor, quint16 data)
 	tcpSocket->write(block);
 }
 
+void asuroqt::parseTcpMsg(const QString &msg, qint16 data)
+{
+	appendLogText(QString("Got TCP: %1 - %2\n").arg(msg).arg(data));
+	
+	if (msg == "leftm") // Left motor speed
+	{
+		// -255..255 --> -127..127
+		qint8 speed = static_cast<qint8>(data/2);
+		IRIO->sendIR(CMD_SPEEDL, speed); // send as unsigned, converted later to signed
+	}
+	else if (msg == "rightm") // Left motor speed
+	{
+		// -255..255 --> -127..127
+		qint8 speed = static_cast<qint8>(data/2);
+		IRIO->sendIR(CMD_SPEEDR, speed); // send as unsigned, converted later to signed
+	}
+}
+
 void asuroqt::sendDummyIR()
 {
 	//IRIO->sendIR(_L("11000000000100"));
@@ -226,7 +251,7 @@ void asuroqt::sendDummyIR()
 	//IRIO->sendIR(9, 175);
 	bool ok;
 	TBuf<20> code(debugIRInput->text().utf16());
-	IRIO->sendIR(code, (char)debugIRPulse->text().toShort(&ok, 16));
+	IRIO->sendIR(code, (quint8)debugIRPulse->text().toShort(&ok, 16));
 }
 
 void asuroqt::connectToServer()
@@ -242,6 +267,37 @@ void asuroqt::disconnectFromServer()
 	connectAction->setEnabled(true);
 }
 
+void asuroqt::serverHasData()
+{
+	//qDebug() << "clientHasData: " << clientSocket->bytesAvailable() << "\n";
+	QDataStream in(tcpSocket);
+	in.setVersion(QDataStream::Qt_4_5);
+
+	while (true)
+	{
+		if (tcpReadBlockSize == 0)
+		{
+			if (tcpSocket->bytesAvailable() < (int)sizeof(quint16))
+				return;
+
+			in >> tcpReadBlockSize;
+		}
+
+		if (tcpSocket->bytesAvailable() < tcpReadBlockSize)
+			return;
+
+		QString msg;
+		qint16 data;
+		in >> msg >> data;
+
+		parseTcpMsg(msg, data);
+		
+		//qDebug() << QString("Received msg: %1=%2 (%3 bytes)\n").arg(msg).arg(data).arg(tcpReadBlockSize);
+
+		tcpReadBlockSize = 0;
+	}
+}
+
 void asuroqt::socketError(QAbstractSocket::SocketError socketError)
 {
 	appendLogText(QString("Socket error!: %1\n").arg(tcpSocket->errorString()));
@@ -253,7 +309,7 @@ void asuroqt::sendDummyData()
 	sendSensorData("switch", 1);
 }
 
-void asuroqt::parseIRByte(char byte)
+void asuroqt::parseIRByte(quint8 byte)
 {
 	if (IRReceiveCode == IR_NONE)
 	{
@@ -263,9 +319,10 @@ void asuroqt::parseIRByte(char byte)
 		case 'L': IRReceiveCode = IR_LINE; break;
 		case 'O': IRReceiveCode = IR_ODO; break;
 		case 'B': IRReceiveCode = IR_BATTERY; break;
+		case 'P': appendLogText("Pong!\n"); break;
 		default: appendLogText(QString("Unrecognized code: %1\n").arg((int)byte)); break;
 		}
-//		appendLogText(QString("Got code: %1\n").arg(QChar(byte)));
+		appendLogText(QString("Got code: %1\n").arg(QChar(byte)));
 	}
 	else
 	{
@@ -303,4 +360,9 @@ void asuroqt::parseIRByte(char byte)
 			break;
 		}
 	}
+}
+
+void asuroqt::sendIRPing()
+{
+	IRIO->sendIR(CMD_UPDATE, 0);
 }
