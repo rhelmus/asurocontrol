@@ -34,6 +34,8 @@
 #include <QtGui/QMainWindow>
 #include <QTcpSocket>
 
+#include "camera/xqcamera.h"
+
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
@@ -47,9 +49,11 @@ class asuroqt : public QMainWindow
 
     QPlainTextEdit *logWidget;
     QTcpSocket *tcpSocket;
-    quint16 tcpReadBlockSize;
+    quint32 tcpReadBlockSize;
     QAction *connectAction;
     CIRIO *IRIO;
+    XQCamera *camera;
+    bool cameraReady;
     QLineEdit *debugIRInput, *debugIRPulse;
     
     enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
@@ -81,6 +85,9 @@ private slots:
 	void sendDummyData(void);
 	void parseIRByte(quint8 byte);
 	void sendIRPing(void);
+	void camIsReady(void) { cameraReady = true; }
+	void imageCaptured(QByteArray data);
+	void camError(XQCamera::Error error);
 	
 public:
 	asuroqt(QWidget *parent = 0);
