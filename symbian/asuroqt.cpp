@@ -41,11 +41,13 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <cameraengine.h>
+
 #include "../shared/shared.h"
 #include "asuroqt.h"
 #include "CIRIO.h"
 
-asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), cameraReady(false),
+asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), cameraReady(false), camFrameDelay(1000),
 									IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
 	IRIO = CIRIO::NewL(this);
@@ -166,10 +168,9 @@ QWidget *asuroqt::createDebugTab()
 	camera->setCaptureSize(QSize(1280, 960));
 	connect(camera, SIGNAL(cameraReady()), this, SLOT(camIsReady()));
 	connect(camera, SIGNAL(captureCompleted(QByteArray)), this, SLOT(imageCaptured(QByteArray)));
-	connect(camera, SIGNAL(captureCompleted(QImage *)), this, SLOT(imageCaptured(QImage *)));
 	connect(camera, SIGNAL(error(XQCamera::Error)), this, SLOT(camError(XQCamera::Error)));
 	vbox->addWidget(button = new QPushButton("Cam"));
-	connect(button, SIGNAL(clicked()), camera, SLOT(capture()));
+	connect(button, SIGNAL(clicked()), this, SLOT(capture()));
 	camera->open(0);
 
 	return ret;
@@ -236,22 +237,72 @@ void asuroqt::sendSensorData(const QString &sensor, qint16 data)
 	tcpSocket->write(block);
 }
 
-void asuroqt::parseTcpMsg(const QString &msg, qint16 data)
+void asuroqt::parseTcp(QDataStream &stream)
 {
-	appendLogText(QString("Got TCP: %1 - %2\n").arg(msg).arg(data));
+	QString msg;
+	stream >> msg;
+
+	if (msg == "framedelay")
+	{
+		stream >> camFrameDelay;
+	}
+	else if (msg == "togglecam")
+	{
+		// UNDONE
+	}
+	else if (msg == "takepic")
+	{
+		capture();
+	}
+	else
+	{
+		// Message with qint16 data
+		qint16 data;
+		stream >> data;
+		
+		if (msg == "leftm") // Left motor speed
+		{
+			// -255..255 --> -127..127
+			qint8 speed = static_cast<qint8>(data/2);
+			IRIO->sendIR(CMD_SPEEDL, speed); // send as unsigned, converted later to signed
+		}
+		else if (msg == "rightm") // Left motor speed
+		{
+			// -255..255 --> -127..127
+			qint8 speed = static_cast<qint8>(data/2);
+			IRIO->sendIR(CMD_SPEEDR, speed); // send as unsigned, converted later to signed
+		}
+	}
 	
-	if (msg == "leftm") // Left motor speed
+	appendLogText(QString("Received msg: %1 (%2 bytes)\n").arg(msg).arg(tcpReadBlockSize));
+}
+
+void asuroqt::ViewFinderFrameReady(const QImage &image)
+{
+	if (tcpSocket->state() != QTcpSocket::ConnectedState)
 	{
-		// -255..255 --> -127..127
-		qint8 speed = static_cast<qint8>(data/2);
-		IRIO->sendIR(CMD_SPEEDL, speed); // send as unsigned, converted later to signed
+//		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
+		return;
 	}
-	else if (msg == "rightm") // Left motor speed
-	{
-		// -255..255 --> -127..127
-		qint8 speed = static_cast<qint8>(data/2);
-		IRIO->sendIR(CMD_SPEEDR, speed); // send as unsigned, converted later to signed
-	}
+	
+	if (!lastFrame.isNull() && (lastFrame.elapsed() < camFrameDelay))
+		return;
+	
+	lastFrame.start();
+	
+	QByteArray block;
+	QDataStream out(&block, QIODevice::WriteOnly);
+	out.setVersion(QDataStream::Qt_4_5); // PC ver is using 4.5
+
+	out << (quint32)0; // Size
+	out << QString("camframe");
+	out << image;
+	out.device()->seek(0);
+	out << (quint32)(block.size() - sizeof(quint32));
+	
+	appendLogText(QString("Send frame: %1 bytes\n").arg(block.size() - sizeof(quint32)));
+
+	tcpSocket->write(block);
 }
 
 void asuroqt::sendDummyIR()
@@ -280,7 +331,6 @@ void asuroqt::disconnectFromServer()
 
 void asuroqt::serverHasData()
 {
-	//qDebug() << "clientHasData: " << clientSocket->bytesAvailable() << "\n";
 	QDataStream in(tcpSocket);
 	in.setVersion(QDataStream::Qt_4_5);
 
@@ -297,14 +347,7 @@ void asuroqt::serverHasData()
 		if (tcpSocket->bytesAvailable() < tcpReadBlockSize)
 			return;
 
-		QString msg;
-		qint16 data;
-		in >> msg >> data;
-
-		parseTcpMsg(msg, data);
-		
-		//qDebug() << QString("Received msg: %1=%2 (%3 bytes)\n").arg(msg).arg(data).arg(tcpReadBlockSize);
-
+		parseTcp(in);
 		tcpReadBlockSize = 0;
 	}
 }
@@ -378,9 +421,26 @@ void asuroqt::sendIRPing()
 	IRIO->sendIR(CMD_UPDATE, 0);
 }
 
+void asuroqt::camIsReady()
+{
+	cameraReady = true;
+	
+	// HACK :) : Use some view finder code for streaming frames
+	camera->d->setVFProcessor(this);
+	TSize size(128, 96);
+	camera->d->iViewFinderSize = QSize(size.iWidth, size.iHeight);
+	camera->d->iCameraEngine->StartViewFinderL(size);
+}
+
+void asuroqt::capture()
+{
+	captureStart.start();
+	camera->capture();
+}
+
 void asuroqt::imageCaptured(QByteArray data)
 {
-	appendLogText("imageCaptured()\n");
+	appendLogText(QString("imageCaptured(): %1 ms elapsed\n").arg(captureStart.elapsed()));
 	
 	if (tcpSocket->state() != QTcpSocket::ConnectedState)
 	{
@@ -390,7 +450,7 @@ void asuroqt::imageCaptured(QByteArray data)
 	
 	QByteArray block;
 	QDataStream out(&block, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_4_5);
+	out.setVersion(QDataStream::Qt_4_5); // PC ver is using 4.5
 
 	out << (quint32)0; // Size
 	out << QString("camera");
