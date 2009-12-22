@@ -29,6 +29,7 @@
 #include "camwidget.h"
 #include "controlwidget.h"
 #include "sensorplot.h"
+#include "tcputil.h"
 
 asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
 {
@@ -192,31 +193,35 @@ QWidget *asuroqt::createCamControlWidget()
     QWidget *ret = new QWidget;
 
     QVBoxLayout *vbox = new QVBoxLayout(ret);
+
     QWidget *w = new QWidget;
-    w->setMaximumSize(300, 75);
-    vbox->addWidget(w);
+    vbox->addWidget(w, 0, Qt::AlignCenter);
+    QHBoxLayout *hbox = new QHBoxLayout(w);
 
-    QGridLayout *grid = new QGridLayout(w);
+    QLabel *label = new QLabel("Show frame every");
+    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    hbox->addWidget(label);
 
-    QPushButton *button = new QPushButton("Fetch ...");
-    grid->addWidget(button, 0, 0);
+    hbox->addWidget(camFrameSpinBox = new QSpinBox);
+    camFrameSpinBox->setMinimum(250);
+    camFrameSpinBox->setMaximum(60000);
+    camFrameSpinBox->setSingleStep(250);
+    camFrameSpinBox->setValue(1000);
+    camFrameSpinBox->setSuffix(" ms");
 
-    fetchCamButtons = new QButtonGroup(this);
+    QPushButton *button = new QPushButton("Apply");
+    connect(button, SIGNAL(clicked()), this, SLOT(applyFrameDelay()));
+    hbox->addWidget(button);
+
+    vbox->addWidget(w = new QWidget, 0, Qt::AlignCenter);
+    hbox = new QHBoxLayout(w);
+
+    hbox->addWidget(button = new QPushButton("Toggle camera"));
+    connect(button, SIGNAL(clicked()), this, SLOT(toggleCamera()));
+
+    hbox->addWidget(button = new QPushButton("Take picture"));
+    connect(button, SIGNAL(clicked()), this, SLOT(takePicture()));
     
-    QRadioButton *radio = new QRadioButton("Once");
-    radio->setChecked(true);
-    fetchCamButtons->addButton(radio);
-    grid->addWidget(radio, 0, 1);
-
-    radio = new QRadioButton("Every...");
-    fetchCamButtons->addButton(radio);
-    grid->addWidget(radio, 1, 1);
-
-    QSpinBox *spinB = new QSpinBox;
-    spinB->setMinimum(1);
-    spinB->setSuffix("s");
-    grid->addWidget(spinB, 1, 2);
-
     return ret;
 }
 
@@ -295,29 +300,67 @@ void asuroqt::setupServer()
             SLOT(clientDisconnected(QObject *)));
 }
 
-void asuroqt::parseTcpMsg(const QString &msg, qint16 data)
+bool asuroqt::canSendTcp(void) const
 {
-    if (msg == "switch")
+    return (clientSocket && (clientSocket->state() == QTcpSocket::ConnectedState));
+}
+
+void asuroqt::parseTcp(QDataStream &stream)
+{
+    QString msg;
+    stream >> msg;
+
+    if (msg == "camera")
     {
-        for (int i=0; i<6; i++)
-        {
-            switchList[i]->setChecked((data & (1<<i)));
-        }
+        QByteArray data;
+        stream >> data;
+        showCamera(data);
     }
-    else if (msg == "linel")
-        linePlot->addData("Left", data);
-    else if (msg == "liner")
-        linePlot->addData("Right", data);
-    else if (msg == "odol")
-        odoPlot->addData("Left", data);
-    else if (msg == "odor")
-        odoPlot->addData("Right", data);
-    else if (msg == "battery")
-        batteryPlot->addData("Battery", data);
+    else if (msg == "camframe")
+    {
+        QImage data;
+        stream >> data;
+        showFrame(data);
+    }
+    else
+    {
+        // Message with qint16 data
+        qint16 data;
+        stream >> data;
+        
+        if (msg == "switch")
+        {
+            for (int i=0; i<6; i++)
+            {
+                switchList[i]->setChecked((data & (1<<i)));
+            }
+        }
+        else if (msg == "linel")
+            linePlot->addData("Left", data);
+        else if (msg == "liner")
+            linePlot->addData("Right", data);
+        else if (msg == "odol")
+            odoPlot->addData("Left", data);
+        else if (msg == "odor")
+            odoPlot->addData("Right", data);
+        else if (msg == "battery")
+            batteryPlot->addData("Battery", data);
+
+    }
+    
+    qDebug() << QString("Received msg: %1 (%2 bytes)\n").arg(msg).arg(tcpReadBlockSize);
 }
 
 void asuroqt::writeTcpMsg(const QString &msg, qint16 data)
 {
+    if (!canSendTcp())
+        return;
+
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << msg;
+    tcpWriter << data;
+    tcpWriter.write();
+#if 0
     if (!clientSocket || (clientSocket->state() != QTcpSocket::ConnectedState))
     {
         qDebug("Cannot send data\n");
@@ -335,6 +378,7 @@ void asuroqt::writeTcpMsg(const QString &msg, qint16 data)
     out << (quint32)(block.size() - sizeof(quint32));
 
     clientSocket->write(block);
+#endif
 }
 
 void asuroqt::showCamera(QByteArray &data)
@@ -343,6 +387,11 @@ void asuroqt::showCamera(QByteArray &data)
     pm.loadFromData(data);
     cameraWidget->loadPixmap(pm);
     smallCameraWidget->loadPixmap(pm);
+}
+
+void asuroqt::showFrame(QImage &data)
+{
+    smallCameraWidget->loadPixmap(QPixmap::fromImage(data));
 }
 
 void asuroqt::clientConnected()
@@ -369,7 +418,7 @@ void asuroqt::clientDisconnected(QObject *obj)
 
 void asuroqt::clientHasData()
 {
-    qDebug() << "clientHasData: " << clientSocket->bytesAvailable() << "\n";
+//     qDebug() << "clientHasData: " << clientSocket->bytesAvailable() << "\n";
     QDataStream in(clientSocket);
     in.setVersion(QDataStream::Qt_4_5);
 
@@ -386,24 +435,7 @@ void asuroqt::clientHasData()
         if (clientSocket->bytesAvailable() < tcpReadBlockSize)
             return;
 
-        QString msg;
-        in >> msg;
-
-        if (msg == "camera")
-        {
-            QByteArray data;
-            in >> data;
-            showCamera(data);
-        }
-        else
-        {
-            qint16 data;
-            in >> data;
-            parseTcpMsg(msg, data);
-        }
-        
-        qDebug() << QString("Received msg: %1 (%2 bytes)\n").arg(msg).arg(tcpReadBlockSize);
-
+        parseTcp(in);
         tcpReadBlockSize = 0;
     }
 }
@@ -453,4 +485,29 @@ void asuroqt::applyMotors()
     
     writeTcpMsg("leftm", static_cast<qint16>(leftMotorKnob->value()));
     writeTcpMsg("rightm", static_cast<qint16>(rightMotorKnob->value()));
+}
+
+void asuroqt::applyFrameDelay()
+{
+    writeTcpMsg("framedelay", static_cast<qint16>(camFrameSpinBox->value()));
+}
+
+void asuroqt::toggleCamera()
+{
+    if (!canSendTcp())
+        return;
+
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << QString("togglecam");
+    tcpWriter.write();
+}
+
+void asuroqt::takePicture()
+{
+    if (!canSendTcp())
+        return;
+
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << QString("takepic");
+    tcpWriter.write();
 }
