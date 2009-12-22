@@ -10,6 +10,9 @@ class XQCameraPrivate;
 class QSize;
 class QImage;
 
+// Added by Rick
+class asuroqt;
+
 // CLASS DECLARATION
 class XQCAMERA_EXPORT XQCamera : public QObject
 {
@@ -50,6 +53,7 @@ Q_SIGNALS:
 private:
     friend class XQViewFinderWidgetPrivate;
     friend class XQCameraPrivate;
+    friend class asuroqt; // Added by Rick
     XQCameraPrivate* d;
 };
 

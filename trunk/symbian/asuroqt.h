@@ -33,9 +33,12 @@
 
 #include <QtGui/QMainWindow>
 #include <QTcpSocket>
+#include <QTime>
 
 #include "camera/xqcamera.h"
+#include "camera/xqcamera_p.h"
 
+class QDataStream;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
@@ -43,7 +46,7 @@ class QPushButton;
 
 class CIRIO; 
 
-class asuroqt : public QMainWindow
+class asuroqt : public QMainWindow, MVFProcessor
 {
     Q_OBJECT
 
@@ -54,6 +57,8 @@ class asuroqt : public QMainWindow
     CIRIO *IRIO;
     XQCamera *camera;
     bool cameraReady;
+    QTime captureStart, lastFrame;
+    int camFrameDelay;
     QLineEdit *debugIRInput, *debugIRPulse;
     
     enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
@@ -74,7 +79,10 @@ class asuroqt : public QMainWindow
     void setOdo(quint8 odo, ESensorSide side);
     void setBattery(quint8 bat);
     void sendSensorData(const QString &sensor, qint16 data);
-    void parseTcpMsg(const QString &msg, qint16 data);
+    void parseTcp(QDataStream &stream);
+    
+    // From MVFProcessor class
+    void ViewFinderFrameReady(const QImage &image);
     
 private slots:
 	void sendDummyIR(void);
@@ -85,7 +93,8 @@ private slots:
 	void sendDummyData(void);
 	void parseIRByte(quint8 byte);
 	void sendIRPing(void);
-	void camIsReady(void) { cameraReady = true; }
+	void camIsReady(void);
+	void capture(void);
 	void imageCaptured(QByteArray data);
 	void camError(XQCamera::Error error);
 	

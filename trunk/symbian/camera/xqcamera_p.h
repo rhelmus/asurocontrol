@@ -12,6 +12,9 @@ class CCameraEngine;
 class XQViewFinderWidgetPrivate;
 class QImage;
 
+// Added by Rick
+class asuroqt;
+
 // CLASS DECLARATION
 class MVFProcessor
 {
@@ -51,6 +54,7 @@ private:
 
 private:
     friend class XQViewFinderWidgetPrivate;
+    friend class asuroqt; // Added by Rick
     XQCamera* q;
     CCameraEngine* iCameraEngine;
     QSize iViewFinderSize;
