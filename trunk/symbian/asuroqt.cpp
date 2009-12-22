@@ -45,7 +45,8 @@
 #include "asuroqt.h"
 #include "CIRIO.h"
 
-asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), IRReceiveCode(IR_NONE), IRBytesReceived(0)
+asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), cameraReady(false),
+									IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
 	IRIO = CIRIO::NewL(this);
 	createUI();	
@@ -85,7 +86,7 @@ void asuroqt::createUI()
 	tabW->addTab(createLogTab(), "Log");
 	tabW->addTab(createDebugTab(), "Debug");
 	vbox->addWidget(tabW);
-	
+		
 	QMenuBar *menuBar = new QMenuBar(this);
 	menuBar->setGeometry(QRect(0, 0, 800, 21));
 	setMenuBar(menuBar);
@@ -161,6 +162,16 @@ QWidget *asuroqt::createDebugTab()
 	connect(button, SIGNAL(clicked()), this, SLOT(sendDummyData()));
 	vbox->addWidget(button);
 
+	camera = new XQCamera(this);
+	camera->setCaptureSize(QSize(1280, 960));
+	connect(camera, SIGNAL(cameraReady()), this, SLOT(camIsReady()));
+	connect(camera, SIGNAL(captureCompleted(QByteArray)), this, SLOT(imageCaptured(QByteArray)));
+	connect(camera, SIGNAL(captureCompleted(QImage *)), this, SLOT(imageCaptured(QImage *)));
+	connect(camera, SIGNAL(error(XQCamera::Error)), this, SLOT(camError(XQCamera::Error)));
+	vbox->addWidget(button = new QPushButton("Cam"));
+	connect(button, SIGNAL(clicked()), camera, SLOT(capture()));
+	camera->open(0);
+
 	return ret;
 }
 
@@ -216,11 +227,11 @@ void asuroqt::sendSensorData(const QString &sensor, qint16 data)
 	QDataStream out(&block, QIODevice::WriteOnly);
 	out.setVersion(QDataStream::Qt_4_5);
 
-	out << (quint16)0; // Size
+	out << (quint32)0; // Size
 	out << sensor;
 	out << data;
 	out.device()->seek(0);
-	out << (quint16)(block.size() - sizeof(quint16));
+	out << (quint32)(block.size() - sizeof(quint32));
 
 	tcpSocket->write(block);
 }
@@ -277,7 +288,7 @@ void asuroqt::serverHasData()
 	{
 		if (tcpReadBlockSize == 0)
 		{
-			if (tcpSocket->bytesAvailable() < (int)sizeof(quint16))
+			if (tcpSocket->bytesAvailable() < (int)sizeof(quint32))
 				return;
 
 			in >> tcpReadBlockSize;
@@ -365,4 +376,36 @@ void asuroqt::parseIRByte(quint8 byte)
 void asuroqt::sendIRPing()
 {
 	IRIO->sendIR(CMD_UPDATE, 0);
+}
+
+void asuroqt::imageCaptured(QByteArray data)
+{
+	appendLogText("imageCaptured()\n");
+	
+	if (tcpSocket->state() != QTcpSocket::ConnectedState)
+	{
+//		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
+		return;
+	}
+	
+	QByteArray block;
+	QDataStream out(&block, QIODevice::WriteOnly);
+	out.setVersion(QDataStream::Qt_4_5);
+
+	out << (quint32)0; // Size
+	out << QString("camera");
+	out << data;
+	out.device()->seek(0);
+	out << (quint32)(block.size() - sizeof(quint32));
+	
+	appendLogText(QString("Send img: %1 bytes\n").arg(block.size() - sizeof(quint32)));
+
+	tcpSocket->write(block);
+	
+	camera->releaseImageBuffer();
+}
+
+void asuroqt::camError(XQCamera::Error error)
+{
+	appendLogText(QString("Cam error: %1\n").arg((int)error));
 }
