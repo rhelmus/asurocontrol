@@ -1,10 +1,12 @@
 SOURCES += asuroqt.cpp \
            main.cpp \
  sensorplot.cpp \
- controlwidget.cpp
+ controlwidget.cpp \
+ camwidget.cpp
 HEADERS += asuroqt.h \
  sensorplot.h \
- controlwidget.h
+ controlwidget.h \
+ camwidget.h
 TEMPLATE = app
 CONFIG += warn_on \
            qt

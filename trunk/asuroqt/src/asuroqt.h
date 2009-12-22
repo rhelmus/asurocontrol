@@ -26,9 +26,11 @@
 
 #include <QMainWindow>
 
+class QButtonGroup;
 class QCheckBox;
 class QIcon;
 class QKeyEvent;
+class QLabel;
 class QSignalMapper;
 class QTcpServer;
 class QTcpSocket;
@@ -36,6 +38,7 @@ class QTcpSocket;
 class QwtKnob;
 class QwtSlider;
 
+class CCamWidget;
 class CControlWidget;
 class CSensorPlot;
 
@@ -49,12 +52,14 @@ class asuroqt: public QMainWindow
     QTcpServer *tcpServer;
     QTcpSocket *clientSocket;
     QSignalMapper *disconnectMapper;
-    quint16 tcpReadBlockSize;
+    quint32 tcpReadBlockSize;
 
     CSensorPlot *linePlot, *odoPlot, *batteryPlot;
+    CCamWidget *cameraWidget, *smallCameraWidget;
     QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
     CControlWidget *controlWidget;
     QwtSlider *controlLSlider, *controlRSlider;
+    QButtonGroup *fetchCamButtons;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
@@ -62,6 +67,8 @@ class asuroqt: public QMainWindow
     QWidget *createBatteryWidget(void);
     QWidget *createControlWidget(void);
     QWidget *createMotorWidget(void);
+    QWidget *createCamControlWidget(void);
+    QWidget *createSmallCamWidget(void);
 
     QWidget *createKnob(const QString &title, QwtKnob *&knob);
     QWidget *createSlider(const QString &title, QwtSlider *&slider);
@@ -69,6 +76,7 @@ class asuroqt: public QMainWindow
     void setupServer(void);
     void parseTcpMsg(const QString &msg, qint16 data);
     void writeTcpMsg(const QString &msg, qint16 data);
+    void showCamera(QByteArray &data);
 
 private slots:
     void clientConnected(void);

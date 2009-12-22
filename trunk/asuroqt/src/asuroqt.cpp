@@ -26,31 +26,49 @@
 #include <qwt_slider.h>
 
 #include "asuroqt.h"
+#include "camwidget.h"
 #include "controlwidget.h"
 #include "sensorplot.h"
 
 asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
 {
-    QWidget *cw = new QWidget;
-    setCentralWidget(cw);
+//     QWidget *cw = new QWidget;
+//     setCentralWidget(cw);
 
-    QVBoxLayout *vbox = new QVBoxLayout(cw);
+    QTabWidget *mainTabWidget = new QTabWidget;
+    mainTabWidget->setTabPosition(QTabWidget::West);
+    setCentralWidget(mainTabWidget);
+
+    QWidget *w = new QWidget;
+    mainTabWidget->addTab(w, "Main");
+    QVBoxLayout *vbox = new QVBoxLayout(w);
 
     vbox->addWidget(createSwitchWidget());
 
+    QSplitter *splitter = new QSplitter(Qt::Vertical);
+    vbox->addWidget(splitter);
+    
     QTabWidget *tabWidget = new QTabWidget;
-    vbox->addWidget(tabWidget);
+    splitter->addWidget(tabWidget);
 
     tabWidget->addTab(createLineWidget(), "Line sensors");
     tabWidget->addTab(createOdoWidget(), "Odo sensors");
     tabWidget->addTab(createBatteryWidget(), "Battery");
 
-    tabWidget = new QTabWidget;
-    vbox->addWidget(tabWidget);
-
+    w = new QWidget;
+    splitter->addWidget(w);
+    QHBoxLayout *hbox = new QHBoxLayout(w);
+    
+    hbox->addWidget(tabWidget = new QTabWidget);
+    tabWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     tabWidget->addTab(createControlWidget(), "Control");
     tabWidget->addTab(createMotorWidget(), "Motor control");
-    
+    tabWidget->addTab(createCamControlWidget(), "Camera control");
+
+    hbox->addWidget(createSmallCamWidget());
+
+    mainTabWidget->addTab(cameraWidget = new CCamWidget, "Camera");
+
     setupServer();
 }
 
@@ -169,6 +187,56 @@ QWidget *asuroqt::createMotorWidget()
     return ret;
 }
 
+QWidget *asuroqt::createCamControlWidget()
+{
+    QWidget *ret = new QWidget;
+
+    QVBoxLayout *vbox = new QVBoxLayout(ret);
+    QWidget *w = new QWidget;
+    w->setMaximumSize(300, 75);
+    vbox->addWidget(w);
+
+    QGridLayout *grid = new QGridLayout(w);
+
+    QPushButton *button = new QPushButton("Fetch ...");
+    grid->addWidget(button, 0, 0);
+
+    fetchCamButtons = new QButtonGroup(this);
+    
+    QRadioButton *radio = new QRadioButton("Once");
+    radio->setChecked(true);
+    fetchCamButtons->addButton(radio);
+    grid->addWidget(radio, 0, 1);
+
+    radio = new QRadioButton("Every...");
+    fetchCamButtons->addButton(radio);
+    grid->addWidget(radio, 1, 1);
+
+    QSpinBox *spinB = new QSpinBox;
+    spinB->setMinimum(1);
+    spinB->setSuffix("s");
+    grid->addWidget(spinB, 1, 2);
+
+    return ret;
+}
+
+QWidget *asuroqt::createSmallCamWidget()
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+
+    QVBoxLayout *vbox = new QVBoxLayout(ret);
+
+    QLabel *label = new QLabel("<qt><h2>Camera</h2>");
+    label->setAlignment(Qt::AlignCenter);
+    label->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    vbox->addWidget(label);
+    
+    vbox->addWidget(smallCameraWidget = new CCamWidget);
+
+    return ret;
+}
+
 QWidget *asuroqt::createKnob(const QString &title, QwtKnob *&knob)
 {
     QFrame *ret = new QFrame;
@@ -260,13 +328,21 @@ void asuroqt::writeTcpMsg(const QString &msg, qint16 data)
     QDataStream out(&block, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_4_5);
 
-    out << (quint16)0; // Size
+    out << (quint32)0; // Size
     out << msg;
     out << data;
     out.device()->seek(0);
-    out << (quint16)(block.size() - sizeof(quint16));
+    out << (quint32)(block.size() - sizeof(quint32));
 
     clientSocket->write(block);
+}
+
+void asuroqt::showCamera(QByteArray &data)
+{
+    QPixmap pm;
+    pm.loadFromData(data);
+    cameraWidget->loadPixmap(pm);
+    smallCameraWidget->loadPixmap(pm);
 }
 
 void asuroqt::clientConnected()
@@ -301,7 +377,7 @@ void asuroqt::clientHasData()
     {
         if (tcpReadBlockSize == 0)
         {
-            if (clientSocket->bytesAvailable() < (int)sizeof(quint16))
+            if (clientSocket->bytesAvailable() < (int)sizeof(quint32))
                 return;
 
             in >> tcpReadBlockSize;
@@ -311,12 +387,22 @@ void asuroqt::clientHasData()
             return;
 
         QString msg;
-        qint16 data;
-        in >> msg >> data;
+        in >> msg;
 
-        parseTcpMsg(msg, data);
+        if (msg == "camera")
+        {
+            QByteArray data;
+            in >> data;
+            showCamera(data);
+        }
+        else
+        {
+            qint16 data;
+            in >> data;
+            parseTcpMsg(msg, data);
+        }
         
-        qDebug() << QString("Received msg: %1=%2 (%3 bytes)\n").arg(msg).arg(data).arg(tcpReadBlockSize);
+        qDebug() << QString("Received msg: %1 (%2 bytes)\n").arg(msg).arg(tcpReadBlockSize);
 
         tcpReadBlockSize = 0;
     }
