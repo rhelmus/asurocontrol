@@ -18,3 +18,6 @@ LIBS += -lqwt
 
 QT += network
 
+INCLUDEPATH += ../../shared
+DEPENDPATH += ../../shared
+SOURCES += tcputil.cpp

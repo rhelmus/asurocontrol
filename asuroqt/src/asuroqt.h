@@ -26,12 +26,13 @@
 
 #include <QMainWindow>
 
-class QButtonGroup;
 class QCheckBox;
+class QDataStream;
 class QIcon;
 class QKeyEvent;
 class QLabel;
 class QSignalMapper;
+class QSpinBox;
 class QTcpServer;
 class QTcpSocket;
 
@@ -59,7 +60,7 @@ class asuroqt: public QMainWindow
     QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
     CControlWidget *controlWidget;
     QwtSlider *controlLSlider, *controlRSlider;
-    QButtonGroup *fetchCamButtons;
+    QSpinBox *camFrameSpinBox;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
@@ -74,9 +75,11 @@ class asuroqt: public QMainWindow
     QWidget *createSlider(const QString &title, QwtSlider *&slider);
 
     void setupServer(void);
-    void parseTcpMsg(const QString &msg, qint16 data);
+    bool canSendTcp(void) const;
+    void parseTcp(QDataStream &stream);
     void writeTcpMsg(const QString &msg, qint16 data);
     void showCamera(QByteArray &data);
+    void showFrame(QImage &data);
 
 private slots:
     void clientConnected(void);
@@ -84,6 +87,9 @@ private slots:
     void clientHasData(void);
     void controlAsuro(void);
     void applyMotors(void);
+    void applyFrameDelay(void);
+    void toggleCamera(void);
+    void takePicture(void);
 
 public:
     asuroqt();
