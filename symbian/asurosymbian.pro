@@ -1,7 +1,7 @@
 TEMPLATE = app
 TARGET = asuroqt
-INCLUDEPATH += camera
-DEPENDPATH += camera
+INCLUDEPATH += camera ../shared
+DEPENDPATH += camera ../shared
 
 include(camera/camera.pri)
 
@@ -16,7 +16,8 @@ SOURCES += CIRIO.cpp \
     asuroqt.rss \
     asuroqt_reg.rss \
     main.cpp \
-    asuroqt.cpp
+    asuroqt.cpp \
+    tcputil.cpp
     
 RESOURCES += 
 MMP_RULES += "LIBRARY c32.lib bafl.lib hal.lib"
