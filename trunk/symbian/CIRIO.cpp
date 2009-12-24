@@ -185,6 +185,7 @@ void CIRIO::RunL()
 		break;
 	case SIR_WAIT:
 		// Got data
+		//asuroUI->appendLogText(QString("%1 ").arg((int)readBuffer[0], 0, 16));
 		if (readBuffer[0] == SIR_START)
 		{
 			SIRState = SIR_READING;
@@ -193,6 +194,7 @@ void CIRIO::RunL()
 		doRead();
 		break;
 	case SIR_READING:
+		//asuroUI->appendLogText(QString("%1 ").arg((int)readBuffer[0], 0, 16));
 		if (readBuffer[0] == SIR_END)
 		{
 			if (readByte.Length() == 8)

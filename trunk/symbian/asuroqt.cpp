@@ -44,10 +44,12 @@
 #include <cameraengine.h>
 
 #include "../shared/shared.h"
+#include "tcputil.h"
 #include "asuroqt.h"
 #include "CIRIO.h"
 
-asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), cameraReady(false), camFrameDelay(1000),
+asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), cameraOpen(false),
+									cameraReady(false), camFrameDelay(1000),
 									IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
 	IRIO = CIRIO::NewL(this);
@@ -171,7 +173,6 @@ QWidget *asuroqt::createDebugTab()
 	connect(camera, SIGNAL(error(XQCamera::Error)), this, SLOT(camError(XQCamera::Error)));
 	vbox->addWidget(button = new QPushButton("Cam"));
 	connect(button, SIGNAL(clicked()), this, SLOT(capture()));
-	camera->open(0);
 
 	return ret;
 }
@@ -218,23 +219,13 @@ void asuroqt::setBattery(quint8 bat)
 
 void asuroqt::sendSensorData(const QString &sensor, qint16 data)
 {
-	if (tcpSocket->state() != QTcpSocket::ConnectedState)
-	{
-//		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
-		return;
-	}
-	
-	QByteArray block;
-	QDataStream out(&block, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_4_5);
+    if (!canSendTcp())
+        return;
 
-	out << (quint32)0; // Size
-	out << sensor;
-	out << data;
-	out.device()->seek(0);
-	out << (quint32)(block.size() - sizeof(quint32));
-
-	tcpSocket->write(block);
+    CTcpWriter tcpWriter(tcpSocket);
+    tcpWriter << sensor;
+    tcpWriter << data;
+    tcpWriter.write();
 }
 
 void asuroqt::parseTcp(QDataStream &stream)
@@ -242,13 +233,15 @@ void asuroqt::parseTcp(QDataStream &stream)
 	QString msg;
 	stream >> msg;
 
-	if (msg == "framedelay")
+	if (msg == "togglecam")
 	{
-		stream >> camFrameDelay;
-	}
-	else if (msg == "togglecam")
-	{
-		// UNDONE
+		if (cameraOpen)
+		{
+			cameraOpen = false;
+			camera->close();
+		}
+		else
+			cameraOpen = camera->open(0);
 	}
 	else if (msg == "takepic")
 	{
@@ -272,37 +265,34 @@ void asuroqt::parseTcp(QDataStream &stream)
 			qint8 speed = static_cast<qint8>(data/2);
 			IRIO->sendIR(CMD_SPEEDR, speed); // send as unsigned, converted later to signed
 		}
+		else if (msg == "framedelay")
+		{
+			camFrameDelay = data;
+		}
 	}
 	
 	appendLogText(QString("Received msg: %1 (%2 bytes)\n").arg(msg).arg(tcpReadBlockSize));
 }
 
+bool asuroqt::canSendTcp(void) const
+{
+    return (tcpSocket->state() == QTcpSocket::ConnectedState);
+}
+
 void asuroqt::ViewFinderFrameReady(const QImage &image)
 {
-	if (tcpSocket->state() != QTcpSocket::ConnectedState)
-	{
-//		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
-		return;
-	}
-	
+    if (!canSendTcp())
+        return;
+
 	if (!lastFrame.isNull() && (lastFrame.elapsed() < camFrameDelay))
 		return;
-	
+
 	lastFrame.start();
-	
-	QByteArray block;
-	QDataStream out(&block, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_4_5); // PC ver is using 4.5
 
-	out << (quint32)0; // Size
-	out << QString("camframe");
-	out << image;
-	out.device()->seek(0);
-	out << (quint32)(block.size() - sizeof(quint32));
-	
-	appendLogText(QString("Send frame: %1 bytes\n").arg(block.size() - sizeof(quint32)));
-
-	tcpSocket->write(block);
+    CTcpWriter tcpWriter(tcpSocket);
+    tcpWriter << QString("camframe");
+    tcpWriter << image;
+    tcpWriter.write();	
 }
 
 void asuroqt::sendDummyIR()
@@ -434,33 +424,24 @@ void asuroqt::camIsReady()
 
 void asuroqt::capture()
 {
-	captureStart.start();
-	camera->capture();
+	if (cameraOpen && cameraReady)
+	{
+		captureStart.start();
+		camera->capture();
+	}
 }
 
 void asuroqt::imageCaptured(QByteArray data)
 {
 	appendLogText(QString("imageCaptured(): %1 ms elapsed\n").arg(captureStart.elapsed()));
 	
-	if (tcpSocket->state() != QTcpSocket::ConnectedState)
-	{
-//		appendLogText(QString("Cannot send data: %1\n").arg(tcpSocket->state()));
-		return;
-	}
-	
-	QByteArray block;
-	QDataStream out(&block, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_4_5); // PC ver is using 4.5
+    if (!canSendTcp())
+        return;
 
-	out << (quint32)0; // Size
-	out << QString("camera");
-	out << data;
-	out.device()->seek(0);
-	out << (quint32)(block.size() - sizeof(quint32));
-	
-	appendLogText(QString("Send img: %1 bytes\n").arg(block.size() - sizeof(quint32)));
-
-	tcpSocket->write(block);
+    CTcpWriter tcpWriter(tcpSocket);
+    tcpWriter << QString("camera");
+    tcpWriter << data;
+    tcpWriter.write();
 	
 	camera->releaseImageBuffer();
 }

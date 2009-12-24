@@ -56,9 +56,9 @@ class asuroqt : public QMainWindow, MVFProcessor
     QAction *connectAction;
     CIRIO *IRIO;
     XQCamera *camera;
-    bool cameraReady;
+    bool cameraOpen, cameraReady;
     QTime captureStart, lastFrame;
-    int camFrameDelay;
+    qint16 camFrameDelay;
     QLineEdit *debugIRInput, *debugIRPulse;
     
     enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
@@ -80,6 +80,7 @@ class asuroqt : public QMainWindow, MVFProcessor
     void setBattery(quint8 bat);
     void sendSensorData(const QString &sensor, qint16 data);
     void parseTcp(QDataStream &stream);
+    bool canSendTcp(void) const;
     
     // From MVFProcessor class
     void ViewFinderFrameReady(const QImage &image);
