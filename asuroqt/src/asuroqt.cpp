@@ -68,7 +68,7 @@ asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
 
     hbox->addWidget(createSmallCamWidget());
 
-    mainTabWidget->addTab(cameraWidget = new CCamWidget, "Camera");
+    mainTabWidget->addTab(createBigCamWidget(), "Camera");
 
     setupServer();
 }
@@ -213,6 +213,22 @@ QWidget *asuroqt::createCamControlWidget()
     connect(button, SIGNAL(clicked()), this, SLOT(applyFrameDelay()));
     hbox->addWidget(button);
 
+    
+    vbox->addWidget(w = new QWidget, 0, Qt::AlignCenter);
+    hbox = new QHBoxLayout(w);
+
+    hbox->addWidget(label = new QLabel("Camera view angle"));
+    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+    hbox->addWidget(camAngleSpinBox = new QSpinBox);
+    camAngleSpinBox->setMaximum(315);
+    camAngleSpinBox->setSingleStep(45);
+    camAngleSpinBox->setValue(0);
+    camAngleSpinBox->setWrapping(true);
+
+    hbox->addWidget(button = new QPushButton("Apply"));
+    connect(button, SIGNAL(clicked()), this, SLOT(applyCamAngle()));
+    
     vbox->addWidget(w = new QWidget, 0, Qt::AlignCenter);
     hbox = new QHBoxLayout(w);
 
@@ -238,6 +254,21 @@ QWidget *asuroqt::createSmallCamWidget()
     vbox->addWidget(label);
     
     vbox->addWidget(smallCameraWidget = new CCamWidget);
+
+    return ret;
+}
+
+QWidget *asuroqt::createBigCamWidget()
+{
+    QWidget *ret = new QWidget;
+
+    QVBoxLayout *vbox = new QVBoxLayout(ret);
+
+    vbox->addWidget(cameraWidget = new CCamWidget);
+
+    QPushButton *button = new QPushButton("Take picture");
+    connect(button, SIGNAL(clicked()), this, SLOT(takePicture()));
+    vbox->addWidget(button);
 
     return ret;
 }
@@ -360,25 +391,6 @@ void asuroqt::writeTcpMsg(const QString &msg, qint16 data)
     tcpWriter << msg;
     tcpWriter << data;
     tcpWriter.write();
-#if 0
-    if (!clientSocket || (clientSocket->state() != QTcpSocket::ConnectedState))
-    {
-        qDebug("Cannot send data\n");
-        return;
-    }
-    
-    QByteArray block;
-    QDataStream out(&block, QIODevice::WriteOnly);
-    out.setVersion(QDataStream::Qt_4_5);
-
-    out << (quint32)0; // Size
-    out << msg;
-    out << data;
-    out.device()->seek(0);
-    out << (quint32)(block.size() - sizeof(quint32));
-
-    clientSocket->write(block);
-#endif
 }
 
 void asuroqt::showCamera(QByteArray &data)
@@ -490,6 +502,13 @@ void asuroqt::applyMotors()
 void asuroqt::applyFrameDelay()
 {
     writeTcpMsg("framedelay", static_cast<qint16>(camFrameSpinBox->value()));
+}
+
+void asuroqt::applyCamAngle()
+{
+    qreal angle = static_cast<qreal>(camAngleSpinBox->value());
+    cameraWidget->setRotation(angle);
+    smallCameraWidget->setRotation(angle);
 }
 
 void asuroqt::toggleCamera()

@@ -60,7 +60,7 @@ class asuroqt: public QMainWindow
     QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
     CControlWidget *controlWidget;
     QwtSlider *controlLSlider, *controlRSlider;
-    QSpinBox *camFrameSpinBox;
+    QSpinBox *camFrameSpinBox, *camAngleSpinBox;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
@@ -70,6 +70,7 @@ class asuroqt: public QMainWindow
     QWidget *createMotorWidget(void);
     QWidget *createCamControlWidget(void);
     QWidget *createSmallCamWidget(void);
+    QWidget *createBigCamWidget(void);
 
     QWidget *createKnob(const QString &title, QwtKnob *&knob);
     QWidget *createSlider(const QString &title, QwtSlider *&slider);
@@ -88,6 +89,7 @@ private slots:
     void controlAsuro(void);
     void applyMotors(void);
     void applyFrameDelay(void);
+    void applyCamAngle(void);
     void toggleCamera(void);
     void takePicture(void);
 
