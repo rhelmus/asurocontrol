@@ -25,8 +25,8 @@
 #include "camwidget.h"
 
 // Code based on http://wiki.forum.nokia.com/index.php/CS001347_-_Scaling_QPixmap_image
-
-CCamWidget::CCamWidget(QWidget *parent, Qt::WindowFlags f) : QWidget(parent, f)
+CCamWidget::CCamWidget(QWidget *parent, Qt::WindowFlags f) : QWidget(parent, f),
+                                                             rotateAngle(0.0)
 {
     setMinimumSize(250, 100);
 }
@@ -37,11 +37,17 @@ void CCamWidget::paintEvent(QPaintEvent *)
         return;
 
     QPainter painter(this);
-    QPoint centerPoint(0,0);
-    QPixmap scaledPixmap = cameraPixmap.scaled(widgetSize, Qt::KeepAspectRatio);
-    centerPoint.setX((widgetSize.width()-scaledPixmap.width()) / 2);
-    centerPoint.setY((widgetSize.height()-scaledPixmap.height()) / 2);
-    painter.drawPixmap(centerPoint, scaledPixmap);
+    QPoint centerPoint;
+
+    // Slow...
+    QMatrix m;
+    m.rotate(rotateAngle);
+    QPixmap pm = cameraPixmap.transformed(m).scaled(widgetSize, Qt::KeepAspectRatio);
+    
+    centerPoint.setX((widgetSize.width()-pm.width()) / 2);
+    centerPoint.setY((widgetSize.height()-pm.height()) / 2);
+    
+    painter.drawPixmap(centerPoint, pm);
 }
 
 void CCamWidget::resizeEvent(QResizeEvent *event)
@@ -53,5 +59,11 @@ void CCamWidget::resizeEvent(QResizeEvent *event)
 void CCamWidget::loadPixmap(const QPixmap &pixmap)
 {
     cameraPixmap = pixmap;
+    update();
+}
+
+void CCamWidget::setRotation(qreal r)
+{
+    rotateAngle = r;
     update();
 }

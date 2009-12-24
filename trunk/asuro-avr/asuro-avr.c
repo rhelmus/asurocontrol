@@ -136,6 +136,7 @@ void parseIR(char cmd, char val)
         StatusLED(GREEN);
         asuroInfo.lastUpdate = Gettime();
         sendSensors();
+//         SerPrint("1234567890");
         Msleep(150);
         StatusLED(RED);
         
@@ -201,6 +202,8 @@ void readIR(void)
 //     PrintInt(data);
 //     UartPutc('\n');
 
+    Msleep(50);
+    
     parseIR(cmd, data);
     
     Msleep(50);
@@ -229,9 +232,9 @@ int main(void)
             case MODE_SLEEP:
                 break;
             case MODE_DRIVE:
-                if ((Gettime() - asuroInfo.toggleDriveTime) > 1500)
-                    pauseDrive();
-                else
+//                 if ((Gettime() - asuroInfo.toggleDriveTime) > 1500)
+//                     pauseDrive();
+//                 else
                 {
                     timediff = (Gettime() - asuroInfo.lastUpdate);
                     

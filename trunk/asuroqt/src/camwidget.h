@@ -29,6 +29,7 @@ class CCamWidget: public QWidget
 {
     QPixmap cameraPixmap;
     QSize widgetSize;
+    qreal rotateAngle;
 
 protected:
     virtual void paintEvent(QPaintEvent *);
@@ -38,6 +39,7 @@ public:
     CCamWidget(QWidget *parent = 0, Qt::WindowFlags f = 0);
 
     void loadPixmap(const QPixmap &pixmap);
+    void setRotation(qreal r);
 };
 
 #endif
