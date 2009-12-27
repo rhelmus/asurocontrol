@@ -41,4 +41,5 @@ void CTcpWriter::write()
     *dataStream << (quint32)(block.size() - sizeof(quint32));
     
     socket->write(block);
+    block.clear();
 }

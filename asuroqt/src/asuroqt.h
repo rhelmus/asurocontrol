@@ -27,11 +27,13 @@
 #include <QMainWindow>
 
 class QCheckBox;
+class QComboBox;
 class QDataStream;
 class QIcon;
 class QKeyEvent;
 class QLabel;
 class QSignalMapper;
+class QSlider;
 class QSpinBox;
 class QTcpServer;
 class QTcpSocket;
@@ -60,7 +62,9 @@ class asuroqt: public QMainWindow
     QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
     CControlWidget *controlWidget;
     QwtSlider *controlLSlider, *controlRSlider;
-    QSpinBox *camFrameSpinBox, *camAngleSpinBox;
+    QSpinBox *camFrameSpinBox, *camFrameSizeSpinBoxes[2], *camAngleSpinBox;
+    QComboBox *camPictureSize, *camExposureCombo, *camWhiteBalanceCombo;
+    QSlider *camZoomSlider, *jpegQualitySlider;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
@@ -88,8 +92,7 @@ private slots:
     void clientHasData(void);
     void controlAsuro(void);
     void applyMotors(void);
-    void applyFrameDelay(void);
-    void applyCamAngle(void);
+    void applyCameraControl(void);
     void toggleCamera(void);
     void takePicture(void);
 
