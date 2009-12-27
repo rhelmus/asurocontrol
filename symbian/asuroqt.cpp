@@ -311,6 +311,16 @@ void asuroqt::parseTcp(QDataStream &stream)
 	{
 		capture();
 	}
+	else if (msg == "camzoomin")
+	{
+		if (cameraOpen)
+			camera->d->iCameraEngine->AdjustDigitalZoom(ETrue);
+	}
+	else if (msg == "camzoomout")
+	{
+		if (cameraOpen)
+			camera->d->iCameraEngine->AdjustDigitalZoom(EFalse);
+	}
 	else
 	{
 		// Message with qint16 data
@@ -332,18 +342,6 @@ void asuroqt::parseTcp(QDataStream &stream)
 		else if (msg == "framedelay")
 		{
 			camFrameDelay = data;
-		}
-		else if (msg == "camzoom")
-		{
-			if (cameraOpen)
-			{
-				TCameraInfo ci;
-				CCamera *cam = camera->d->iCameraEngine->Camera();
-				cam->CameraInfo(ci);
-				TReal32 zoom = (TReal32)data * ci.iMaxDigitalZoomFactor / 100.0; // Convert from %
-				cam->SetDigitalZoomFactor(zoom);
-			}
-				
 		}
 		else if (msg == "camjpegq")
 		{
