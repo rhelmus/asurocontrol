@@ -62,9 +62,9 @@ class asuroqt: public QMainWindow
     QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
     CControlWidget *controlWidget;
     QwtSlider *controlLSlider, *controlRSlider;
-    QSpinBox *camFrameSpinBox, *camFrameSizeSpinBoxes[2], *camAngleSpinBox;
+    QSpinBox *camFrameSpinBox, *camAngleSpinBox;
     QComboBox *camPictureSize, *camExposureCombo, *camWhiteBalanceCombo;
-    QSlider *camZoomSlider, *jpegQualitySlider;
+    QSlider *jpegQualitySlider;
 
     QWidget *createSwitchWidget(void);
     QWidget *createLineWidget(void);
@@ -93,6 +93,8 @@ private slots:
     void controlAsuro(void);
     void applyMotors(void);
     void applyCameraControl(void);
+    void zoomCameraIn(void);
+    void zoomCameraOut(void);
     void toggleCamera(void);
     void takePicture(void);
 

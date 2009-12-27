@@ -201,58 +201,48 @@ QWidget *asuroqt::createCamControlWidget()
     
     grid->addWidget(new QLabel("Show frame every"), 0, 0);
     grid->addWidget(camFrameSpinBox = new QSpinBox, 0, 1);
-    camFrameSpinBox->setMinimum(250);
+    camFrameSpinBox->setMinimum(25);
     camFrameSpinBox->setMaximum(60000);
     camFrameSpinBox->setSingleStep(250);
     camFrameSpinBox->setValue(1000);
     camFrameSpinBox->setSuffix(" ms");
     
-    grid->addWidget(new QLabel("Frame view size"), 1, 0);
-    QWidget *w = new QWidget;
-    grid->addWidget(w, 1, 1);
-    QHBoxLayout *frhbox = new QHBoxLayout(w);
-    frhbox->addWidget(camFrameSizeSpinBoxes[0] = new QSpinBox);
-    camFrameSizeSpinBoxes[0]->setMinimum(100);
-    camFrameSizeSpinBoxes[0]->setMaximum(1600);
-    camFrameSizeSpinBoxes[0]->setSingleStep(5);
-    camFrameSizeSpinBoxes[0]->setValue(250);
-    QLabel *l = new QLabel("x");
-    l->setAlignment(Qt::AlignCenter);
-    frhbox->addWidget(l);
-    frhbox->addWidget(camFrameSizeSpinBoxes[1] = new QSpinBox);
-    camFrameSizeSpinBoxes[1]->setMinimum(100);
-    camFrameSizeSpinBoxes[1]->setMaximum(1200);
-    camFrameSizeSpinBoxes[1]->setSingleStep(5);
-    camFrameSizeSpinBoxes[1]->setValue(100);
-
-    grid->addWidget(new QLabel("Camera view angle"), 2, 0);
-    grid->addWidget(camAngleSpinBox = new QSpinBox, 2, 1);
+    grid->addWidget(new QLabel("Camera view angle"), 1, 0);
+    grid->addWidget(camAngleSpinBox = new QSpinBox, 1, 1);
     camAngleSpinBox->setMaximum(315);
     camAngleSpinBox->setSingleStep(45);
     camAngleSpinBox->setValue(0);
     camAngleSpinBox->setWrapping(true);
     
-    grid->addWidget(new QLabel("Picture size"), 3, 0);
-    grid->addWidget(camPictureSize = new QComboBox, 3, 1);
+    grid->addWidget(new QLabel("Picture size"), 2, 0);
+    grid->addWidget(camPictureSize = new QComboBox, 2, 1);
     camPictureSize->addItems(QStringList() << "1600x1200" << "1152x864" << "640x480" << "320x240");
 
-    grid->addWidget(new QLabel("Camera exposure"), 0, 2);
-    grid->addWidget(camExposureCombo = new QComboBox, 0, 3);
+    grid->addWidget(new QLabel("Camera exposure"), 3, 0);
+    grid->addWidget(camExposureCombo = new QComboBox, 3, 1);
     camExposureCombo->addItems(QStringList() << "Auto" << "Night" << "Backlight" << "Center");
     
-    grid->addWidget(new QLabel("Cam white balance"), 1, 2);
-    grid->addWidget(camWhiteBalanceCombo = new QComboBox, 1, 3);
+    grid->addWidget(new QLabel("Cam white balance"), 0, 2);
+    grid->addWidget(camWhiteBalanceCombo = new QComboBox, 0, 3);
     camWhiteBalanceCombo->addItems(QStringList() << "Auto" << "Daylight" << "Tungsten" << "Fluorescent");
     
-    grid->addWidget(new QLabel("Camera zoom"), 2, 2);
-    grid->addWidget(camZoomSlider = new QSlider(Qt::Horizontal), 2, 3);
-    camZoomSlider->setTickPosition(QSlider::TicksBelow);
-    camZoomSlider->setTickInterval(10);
-    camZoomSlider->setRange(0, 100);
-    camZoomSlider->setSingleStep(10);
+    grid->addWidget(new QLabel("Camera zoom"), 1, 2);
+    QHBoxLayout *zhbox = new QHBoxLayout;
+    grid->addLayout(zhbox, 1, 3);
+    QPushButton *button = new QPushButton("<<");
+    button->setAutoRepeat(true);
+    button->setAutoRepeatDelay(25);
+    button->setAutoRepeatInterval(75);
+    connect(button, SIGNAL(clicked()), this, SLOT(zoomCameraOut()));
+    zhbox->addWidget(button);
+    zhbox->addWidget(button = new QPushButton(">>"));
+    button->setAutoRepeat(true);
+    button->setAutoRepeatDelay(25);
+    button->setAutoRepeatInterval(75);
+    connect(button, SIGNAL(clicked()), this, SLOT(zoomCameraIn()));
     
-    grid->addWidget(new QLabel("jpeg quality"), 3, 2);
-    grid->addWidget(jpegQualitySlider = new QSlider(Qt::Horizontal), 3, 3);
+    grid->addWidget(new QLabel("jpeg quality"), 2, 2);
+    grid->addWidget(jpegQualitySlider = new QSlider(Qt::Horizontal), 2, 3);
     jpegQualitySlider->setTickPosition(QSlider::TicksBelow);
     jpegQualitySlider->setTickInterval(10);
     jpegQualitySlider->setRange(1, 100);
@@ -263,8 +253,8 @@ QWidget *asuroqt::createCamControlWidget()
     QVBoxLayout *vbox = new QVBoxLayout;
     hbox->addLayout(vbox);
     
-    QPushButton *button = new QPushButton("Apply settings");
-    vbox->addWidget(button);
+    vbox->addWidget(button = new QPushButton("Apply settings"));
+    connect(button, SIGNAL(clicked()), this, SLOT(applyCameraControl()));
     
     vbox->addWidget(button = new QPushButton("Toggle camera"));
     connect(button, SIGNAL(clicked()), this, SLOT(toggleCamera()));
@@ -273,57 +263,6 @@ QWidget *asuroqt::createCamControlWidget()
     connect(button, SIGNAL(clicked()), this, SLOT(takePicture()));
     
     return ret;
-    
-
-#if 0
-    QVBoxLayout *vbox = new QVBoxLayout(ret);
-
-    QWidget *w = new QWidget;
-    vbox->addWidget(w, 0, Qt::AlignCenter);
-    QHBoxLayout *hbox = new QHBoxLayout(w);
-
-    QLabel *label = new QLabel("Show frame every");
-    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    hbox->addWidget(label);
-
-    hbox->addWidget(camFrameSpinBox = new QSpinBox);
-    camFrameSpinBox->setMinimum(250);
-    camFrameSpinBox->setMaximum(60000);
-    camFrameSpinBox->setSingleStep(250);
-    camFrameSpinBox->setValue(1000);
-    camFrameSpinBox->setSuffix(" ms");
-
-    QPushButton *button = new QPushButton("Apply");
-    connect(button, SIGNAL(clicked()), this, SLOT(applyFrameDelay()));
-    hbox->addWidget(button);
-
-    
-    vbox->addWidget(w = new QWidget, 0, Qt::AlignCenter);
-    hbox = new QHBoxLayout(w);
-
-    hbox->addWidget(label = new QLabel("Camera view angle"));
-    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-    hbox->addWidget(camAngleSpinBox = new QSpinBox);
-    camAngleSpinBox->setMaximum(315);
-    camAngleSpinBox->setSingleStep(45);
-    camAngleSpinBox->setValue(0);
-    camAngleSpinBox->setWrapping(true);
-
-    hbox->addWidget(button = new QPushButton("Apply"));
-    connect(button, SIGNAL(clicked()), this, SLOT(applyCamAngle()));
-    
-    vbox->addWidget(w = new QWidget, 0, Qt::AlignCenter);
-    hbox = new QHBoxLayout(w);
-
-    hbox->addWidget(button = new QPushButton("Toggle camera"));
-    connect(button, SIGNAL(clicked()), this, SLOT(toggleCamera()));
-
-    hbox->addWidget(button = new QPushButton("Take picture"));
-    connect(button, SIGNAL(clicked()), this, SLOT(takePicture()));
-    
-    return ret;
-#endif
 }
 
 QWidget *asuroqt::createSmallCamWidget()
@@ -586,17 +525,14 @@ void asuroqt::applyMotors()
 
 void asuroqt::applyCameraControl()
 {
+    if (!canSendTcp())
+        return;
+
     // Frame delay
     writeTcpMsg("framedelay", static_cast<qint16>(camFrameSpinBox->value()));
     
-    // Frame size
-    CTcpWriter tcpWriter(clientSocket);
-    tcpWriter << QString("framesize");
-    tcpWriter << (quint16)camFrameSizeSpinBoxes[0]->value();
-    tcpWriter << (quint16)camFrameSizeSpinBoxes[0]->value();
-    tcpWriter.write();
-    
     // View angle
+    CTcpWriter tcpWriter(clientSocket);
     qreal angle = static_cast<qreal>(camAngleSpinBox->value());
     cameraWidget->setRotation(angle);
     smallCameraWidget->setRotation(angle);
@@ -615,11 +551,28 @@ void asuroqt::applyCameraControl()
     tcpWriter << QString("camwb") << camWhiteBalanceCombo->currentText();
     tcpWriter.write();
 
-    // Cam zoom
-    writeTcpMsg("camzoom", camZoomSlider->value());
-
     // jpeg quality
     writeTcpMsg("camjpegq", jpegQualitySlider->value());
+}
+
+void asuroqt::zoomCameraIn()
+{
+    if (!canSendTcp())
+        return;
+
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << QString("camzoomin");
+    tcpWriter.write();
+}
+
+void asuroqt::zoomCameraOut()
+{
+    if (!canSendTcp())
+        return;
+
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << QString("camzoomout");
+    tcpWriter.write();
 }
 
 void asuroqt::toggleCamera()
