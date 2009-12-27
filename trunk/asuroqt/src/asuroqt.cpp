@@ -56,18 +56,18 @@ asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
     tabWidget->addTab(createOdoWidget(), "Odo sensors");
     tabWidget->addTab(createBatteryWidget(), "Battery");
 
-    w = new QWidget;
-    splitter->addWidget(w);
-    QHBoxLayout *hbox = new QHBoxLayout(w);
     
-    hbox->addWidget(tabWidget = new QTabWidget);
+    QSplitter *subsplit = new QSplitter(Qt::Horizontal);
+    splitter->addWidget(subsplit);
+    
+    subsplit->addWidget(createSmallCamWidget());
+
+    subsplit->addWidget(tabWidget = new QTabWidget);
     tabWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     tabWidget->addTab(createControlWidget(), "Control");
     tabWidget->addTab(createMotorWidget(), "Motor control");
     tabWidget->addTab(createCamControlWidget(), "Camera control");
-
-    hbox->addWidget(createSmallCamWidget());
-
+    
     mainTabWidget->addTab(createBigCamWidget(), "Camera");
 
     setupServer();
@@ -191,7 +191,91 @@ QWidget *asuroqt::createMotorWidget()
 QWidget *asuroqt::createCamControlWidget()
 {
     QWidget *ret = new QWidget;
+    
+    QHBoxLayout *hbox = new QHBoxLayout(ret);
+    hbox->setSpacing(20);
+    
+    QGridLayout *grid = new QGridLayout;
+    grid->setHorizontalSpacing(2);
+    hbox->addLayout(grid);
+    
+    grid->addWidget(new QLabel("Show frame every"), 0, 0);
+    grid->addWidget(camFrameSpinBox = new QSpinBox, 0, 1);
+    camFrameSpinBox->setMinimum(250);
+    camFrameSpinBox->setMaximum(60000);
+    camFrameSpinBox->setSingleStep(250);
+    camFrameSpinBox->setValue(1000);
+    camFrameSpinBox->setSuffix(" ms");
+    
+    grid->addWidget(new QLabel("Frame view size"), 1, 0);
+    QWidget *w = new QWidget;
+    grid->addWidget(w, 1, 1);
+    QHBoxLayout *frhbox = new QHBoxLayout(w);
+    frhbox->addWidget(camFrameSizeSpinBoxes[0] = new QSpinBox);
+    camFrameSizeSpinBoxes[0]->setMinimum(100);
+    camFrameSizeSpinBoxes[0]->setMaximum(1600);
+    camFrameSizeSpinBoxes[0]->setSingleStep(5);
+    camFrameSizeSpinBoxes[0]->setValue(250);
+    QLabel *l = new QLabel("x");
+    l->setAlignment(Qt::AlignCenter);
+    frhbox->addWidget(l);
+    frhbox->addWidget(camFrameSizeSpinBoxes[1] = new QSpinBox);
+    camFrameSizeSpinBoxes[1]->setMinimum(100);
+    camFrameSizeSpinBoxes[1]->setMaximum(1200);
+    camFrameSizeSpinBoxes[1]->setSingleStep(5);
+    camFrameSizeSpinBoxes[1]->setValue(100);
 
+    grid->addWidget(new QLabel("Camera view angle"), 2, 0);
+    grid->addWidget(camAngleSpinBox = new QSpinBox, 2, 1);
+    camAngleSpinBox->setMaximum(315);
+    camAngleSpinBox->setSingleStep(45);
+    camAngleSpinBox->setValue(0);
+    camAngleSpinBox->setWrapping(true);
+    
+    grid->addWidget(new QLabel("Picture size"), 3, 0);
+    grid->addWidget(camPictureSize = new QComboBox, 3, 1);
+    camPictureSize->addItems(QStringList() << "1600x1200" << "1152x864" << "640x480" << "320x240");
+
+    grid->addWidget(new QLabel("Camera exposure"), 0, 2);
+    grid->addWidget(camExposureCombo = new QComboBox, 0, 3);
+    camExposureCombo->addItems(QStringList() << "Auto" << "Night" << "Backlight" << "Center");
+    
+    grid->addWidget(new QLabel("Cam white balance"), 1, 2);
+    grid->addWidget(camWhiteBalanceCombo = new QComboBox, 1, 3);
+    camWhiteBalanceCombo->addItems(QStringList() << "Auto" << "Daylight" << "Tungsten" << "Fluorescent");
+    
+    grid->addWidget(new QLabel("Camera zoom"), 2, 2);
+    grid->addWidget(camZoomSlider = new QSlider(Qt::Horizontal), 2, 3);
+    camZoomSlider->setTickPosition(QSlider::TicksBelow);
+    camZoomSlider->setTickInterval(10);
+    camZoomSlider->setRange(0, 100);
+    camZoomSlider->setSingleStep(10);
+    
+    grid->addWidget(new QLabel("jpeg quality"), 3, 2);
+    grid->addWidget(jpegQualitySlider = new QSlider(Qt::Horizontal), 3, 3);
+    jpegQualitySlider->setTickPosition(QSlider::TicksBelow);
+    jpegQualitySlider->setTickInterval(10);
+    jpegQualitySlider->setRange(1, 100);
+    jpegQualitySlider->setSingleStep(10);
+    jpegQualitySlider->setValue(50);
+    
+    
+    QVBoxLayout *vbox = new QVBoxLayout;
+    hbox->addLayout(vbox);
+    
+    QPushButton *button = new QPushButton("Apply settings");
+    vbox->addWidget(button);
+    
+    vbox->addWidget(button = new QPushButton("Toggle camera"));
+    connect(button, SIGNAL(clicked()), this, SLOT(toggleCamera()));
+
+    vbox->addWidget(button = new QPushButton("Take picture"));
+    connect(button, SIGNAL(clicked()), this, SLOT(takePicture()));
+    
+    return ret;
+    
+
+#if 0
     QVBoxLayout *vbox = new QVBoxLayout(ret);
 
     QWidget *w = new QWidget;
@@ -239,6 +323,7 @@ QWidget *asuroqt::createCamControlWidget()
     connect(button, SIGNAL(clicked()), this, SLOT(takePicture()));
     
     return ret;
+#endif
 }
 
 QWidget *asuroqt::createSmallCamWidget()
@@ -499,16 +584,42 @@ void asuroqt::applyMotors()
     writeTcpMsg("rightm", static_cast<qint16>(rightMotorKnob->value()));
 }
 
-void asuroqt::applyFrameDelay()
+void asuroqt::applyCameraControl()
 {
+    // Frame delay
     writeTcpMsg("framedelay", static_cast<qint16>(camFrameSpinBox->value()));
-}
-
-void asuroqt::applyCamAngle()
-{
+    
+    // Frame size
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << QString("framesize");
+    tcpWriter << (quint16)camFrameSizeSpinBoxes[0]->value();
+    tcpWriter << (quint16)camFrameSizeSpinBoxes[0]->value();
+    tcpWriter.write();
+    
+    // View angle
     qreal angle = static_cast<qreal>(camAngleSpinBox->value());
     cameraWidget->setRotation(angle);
     smallCameraWidget->setRotation(angle);
+
+    // Pic size
+    tcpWriter << QString("picsize");
+    tcpWriter << (quint16)camPictureSize->currentText().section("x", 0, 0).toInt();
+    tcpWriter << (quint16)camPictureSize->currentText().section("x", 1, 1).toInt();
+    tcpWriter.write();
+    
+    // Cam exposure
+    tcpWriter << QString("camexposure") << camExposureCombo->currentText();
+    tcpWriter.write();
+    
+    // Cam white balance
+    tcpWriter << QString("camwb") << camWhiteBalanceCombo->currentText();
+    tcpWriter.write();
+
+    // Cam zoom
+    writeTcpMsg("camzoom", camZoomSlider->value());
+
+    // jpeg quality
+    writeTcpMsg("camjpegq", jpegQualitySlider->value());
 }
 
 void asuroqt::toggleCamera()

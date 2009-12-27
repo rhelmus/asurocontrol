@@ -137,7 +137,6 @@ void parseIR(char cmd, char val)
         asuroInfo.lastUpdate = Gettime();
         sendSensors();
 //         SerPrint("1234567890");
-        Msleep(150);
         StatusLED(RED);
         
         if (asuroInfo.mode == MODE_SLEEP)
@@ -171,7 +170,7 @@ void readIR(void)
     for (i=0; i<13; i++)
     {
         // Longer timing than regular RC5: Symbian doesn't seem to provide enough accuracy
-        Msleep(15);
+        Msleep(7);
         
         irstat = (PIND & (1<<PD0));
         if (irstat)
@@ -188,9 +187,9 @@ void readIR(void)
         time = Gettime();
         while (irstat == (PIND & (1<<PD0)))
         {
-            if ((Gettime()-time) > 50) // Timeout! --> abort
+            if ((Gettime()-time) > 30) // Timeout! --> abort
                 return;
-            Sleep(150);
+            Sleep(10);
         }
     }
     
@@ -202,11 +201,9 @@ void readIR(void)
 //     PrintInt(data);
 //     UartPutc('\n');
 
-    Msleep(50);
+    Msleep(25);
     
-    parseIR(cmd, data);
-    
-    Msleep(50);
+    parseIR(cmd, data);    
 }
 
 int main(void)
