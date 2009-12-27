@@ -49,10 +49,17 @@
 #include "CIRIO.h"
 
 asuroqt::asuroqt(QWidget *parent) : QMainWindow(parent), tcpReadBlockSize(0), cameraOpen(false),
-									cameraReady(false), camFrameDelay(1000),
+									cameraReady(false), camFrameDelay(1000), camFrameSize(128, 96),
 									IRReceiveCode(IR_NONE), IRBytesReceived(0)
 {
 	IRIO = CIRIO::NewL(this);
+	
+	camera = new XQCamera(this);
+	camera->setCaptureSize(QSize(1600, 1200));
+	connect(camera, SIGNAL(cameraReady()), this, SLOT(camIsReady()));
+	connect(camera, SIGNAL(captureCompleted(QByteArray)), this, SLOT(imageCaptured(QByteArray)));
+	connect(camera, SIGNAL(error(XQCamera::Error)), this, SLOT(camError(XQCamera::Error)));
+
 	createUI();	
 	
 	connect(this, SIGNAL(gotIRByte(quint8)), this, SLOT(parseIRByte(quint8)));
@@ -166,14 +173,12 @@ QWidget *asuroqt::createDebugTab()
 	connect(button, SIGNAL(clicked()), this, SLOT(sendDummyData()));
 	vbox->addWidget(button);
 
-	camera = new XQCamera(this);
-	camera->setCaptureSize(QSize(1280, 960));
-	connect(camera, SIGNAL(cameraReady()), this, SLOT(camIsReady()));
-	connect(camera, SIGNAL(captureCompleted(QByteArray)), this, SLOT(imageCaptured(QByteArray)));
-	connect(camera, SIGNAL(error(XQCamera::Error)), this, SLOT(camError(XQCamera::Error)));
 	vbox->addWidget(button = new QPushButton("Cam"));
 	connect(button, SIGNAL(clicked()), this, SLOT(capture()));
 
+	vbox->addWidget(button = new QPushButton("Cam specs"));
+	connect(button, SIGNAL(clicked()), this, SLOT(dumpCamSpecs()));
+	
 	return ret;
 }
 
@@ -233,7 +238,66 @@ void asuroqt::parseTcp(QDataStream &stream)
 	QString msg;
 	stream >> msg;
 
-	if (msg == "togglecam")
+	if (msg == "framesize")
+	{
+		quint16 w, h;
+		stream >> w >> h;
+		camFrameSize = QSize(w, h);
+		if (cameraOpen)
+		{
+			camera->d->iCameraEngine->StopViewFinder();
+			setCamVFP();
+		}
+	}
+	else if (msg == "picsize")
+	{
+		quint16 w, h;
+		stream >> w >> h;
+		camera->setCaptureSize(QSize(w, h));
+	}
+	else if (msg == "camexposure")
+	{
+		QString exp;
+		stream >> exp;
+		if (cameraOpen)
+		{
+			// Only handle supported ones by e51
+			CCamera::TExposure exposure = CCamera::EExposureAuto;
+			
+			if (exp == "Auto")
+				exposure = CCamera::EExposureAuto;
+			else if (exp == "Night")
+				exposure = CCamera::EExposureNight;
+			else if (exp == "Backlight")
+				exposure = CCamera::EExposureBacklight;
+			else if (exp == "Center")
+				exposure = CCamera::EExposureCenter;
+			
+			camera->d->iCameraEngine->Camera()->SetExposureL(exposure);
+		}
+	}
+	else if (msg == "camwb")
+	{
+		QString wb;
+		stream >> wb;
+		if (cameraOpen)
+		{
+			// Only handle supported ones by e51
+			CCamera::TWhiteBalance balance = CCamera::EWBAuto;
+			
+			if (wb == "Auto")
+				balance = CCamera::EWBAuto;
+			else if (wb == "Daylight")
+				balance = CCamera::EWBDaylight;
+			else if (wb == "Tungsten")
+				balance = CCamera::EWBTungsten;
+			else if (wb == "Fluorescent")
+				balance = CCamera::EWBFluorescent;
+			
+			camera->d->iCameraEngine->Camera()->SetWhiteBalanceL(balance);
+		}
+	}
+	else if (msg == "togglecam")
 	{
 		if (cameraOpen)
 		{
@@ -269,6 +333,23 @@ void asuroqt::parseTcp(QDataStream &stream)
 		{
 			camFrameDelay = data;
 		}
+		else if (msg == "camzoom")
+		{
+			if (cameraOpen)
+			{
+				TCameraInfo ci;
+				CCamera *cam = camera->d->iCameraEngine->Camera();
+				cam->CameraInfo(ci);
+				TReal32 zoom = (TReal32)data * ci.iMaxDigitalZoomFactor / 100.0; // Convert from %
+				cam->SetDigitalZoomFactor(zoom);
+			}
+				
+		}
+		else if (msg == "camjpegq")
+		{
+			if (cameraOpen)
+				camera->d->iCameraEngine->Camera()->SetJpegQuality(data);
+		}
 	}
 	
 	appendLogText(QString("Received msg: %1 (%2 bytes)\n").arg(msg).arg(tcpReadBlockSize));
@@ -277,6 +358,15 @@ void asuroqt::parseTcp(QDataStream &stream)
 bool asuroqt::canSendTcp(void) const
 {
     return (tcpSocket->state() == QTcpSocket::ConnectedState);
+}
+
+void asuroqt::setCamVFP()
+{
+	// HACK :) : Use some view finder code for streaming frames
+	camera->d->setVFProcessor(this);
+	TSize size(camFrameSize.width(), camFrameSize.height());
+	camera->d->iViewFinderSize = camFrameSize;
+	camera->d->iCameraEngine->StartViewFinderL(size);
 }
 
 void asuroqt::ViewFinderFrameReady(const QImage &image)
@@ -408,18 +498,13 @@ void asuroqt::parseIRByte(quint8 byte)
 
 void asuroqt::sendIRPing()
 {
-	IRIO->sendIR(CMD_UPDATE, 0);
+	//IRIO->sendIR(CMD_UPDATE, 0);
 }
 
 void asuroqt::camIsReady()
 {
 	cameraReady = true;
-	
-	// HACK :) : Use some view finder code for streaming frames
-	camera->d->setVFProcessor(this);
-	TSize size(128, 96);
-	camera->d->iViewFinderSize = QSize(size.iWidth, size.iHeight);
-	camera->d->iCameraEngine->StartViewFinderL(size);
+	setCamVFP();
 }
 
 void asuroqt::capture()
@@ -449,4 +534,66 @@ void asuroqt::imageCaptured(QByteArray data)
 void asuroqt::camError(XQCamera::Error error)
 {
 	appendLogText(QString("Cam error: %1\n").arg((int)error));
+}
+
+void asuroqt::dumpCamSpecs()
+{
+	TCameraInfo ci;
+	CCamera *cam = camera->d->iCameraEngine->Camera();
+	
+	if (!cam)
+		return;
+	
+	cam->CameraInfo(ci);
+	
+	appendLogText(QString("Contrast: %1\n").arg((ci.iOptionsSupported & TCameraInfo::EContrastSupported)));
+	appendLogText(QString("Brightness: %1\n").arg((ci.iOptionsSupported & TCameraInfo::EBrightnessSupported)));
+	
+	QString s = "Exposure: ";
+	TUint32 e = ci.iExposureModesSupported;
+	if (e & CCamera::EExposureAuto) s += " EExposureAuto";
+	if (e & CCamera::EExposureNight) s += " EExposureNight";
+	if (e & CCamera::EExposureBacklight) s += " EExposureBacklight";
+	if (e & CCamera::EExposureCenter) s += " EExposureCenter";
+	if (e & CCamera::EExposureSport) s += " EExposureSport";
+	if (e & CCamera::EExposureVeryLong) s += " EExposureVeryLong";
+	if (e & CCamera::EExposureSnow) s += " EExposureSnow";
+	if (e & CCamera::EExposureBeach) s += " EExposureBeach";
+	if (e & CCamera::EExposureProgram) s += " EExposureProgram";
+	if (e & CCamera::EExposureAperturePriority) s += " EExposureAperturePriority";
+	if (e & CCamera::EExposureShutterPriority) s += " EExposureShutterPriority";
+	if (e & CCamera::EExposureManual) s += " EExposureManual";
+	if (e & CCamera::EExposureSuperNight) s += " EExposureSuperNight";
+	if (e & CCamera::EExposureInfra) s += " EExposureInfra";
+	appendLogText(s + "\n");
+	
+	TUint32 w = ci.iWhiteBalanceModesSupported;
+	s = "WhiteBalance: ";
+	if (w & CCamera::EWBAuto) s += "EWBAuto";
+	if (w & CCamera::EWBDaylight) s += "EWBDaylight";
+	if (w & CCamera::EWBCloudy) s += "EWBCloudy";
+	if (w & CCamera::EWBTungsten) s += "EWBTungsten";
+	if (w & CCamera::EWBFluorescent) s += "EWBFluorescent";
+	if (w & CCamera::EWBFlash) s += "EWBFlash";
+	if (w & CCamera::EWBSnow) s += "EWBSnow";
+	if (w & CCamera::EWBBeach) s += "EWBBeach";
+	if (w & CCamera::EWBManual) s += "EWBManual";
+	if (w & CCamera::EWBShade) s += "EWBShade";
+	appendLogText(s + "\n");
+	
+	appendLogText(QString("Zoom: %1 - %2\n").arg(ci.iMinZoom).arg(ci.iMaxZoom));
+	appendLogText(QString("Max Digital zoom: %1\n").arg(ci.iMaxDigitalZoom));
+	appendLogText(QString("Zoom factor: %1 - %2\n").arg(ci.iMinZoomFactor).arg(ci.iMaxZoomFactor));
+	appendLogText(QString("Max Digital zoom factor: %1\n").arg(ci.iMaxDigitalZoomFactor));
+	
+	s = "Cam sizes (Exif): ";
+	for (int i=0; i<ci.iNumImageSizesSupported; i++)
+	{
+		TSize size;
+		cam->EnumerateCaptureSizes(size, i, CCamera::EFormatExif);
+		s += QString(" %1x%2").arg(size.iWidth).arg(size.iHeight);
+	}
+	appendLogText(s + "\n");
+
+	appendLogText(QString("JPeg quality: %1").arg(cam->JpegQuality()));
 }
