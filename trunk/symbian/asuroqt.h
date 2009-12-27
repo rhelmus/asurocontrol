@@ -59,6 +59,7 @@ class asuroqt : public QMainWindow, MVFProcessor
     bool cameraOpen, cameraReady;
     QTime captureStart, lastFrame;
     qint16 camFrameDelay;
+    QSize camFrameSize;
     QLineEdit *debugIRInput, *debugIRPulse;
     
     enum EIRReceiveCode { IR_NONE, IR_SWITCH, IR_LINE, IR_ODO, IR_BATTERY };
@@ -81,6 +82,7 @@ class asuroqt : public QMainWindow, MVFProcessor
     void sendSensorData(const QString &sensor, qint16 data);
     void parseTcp(QDataStream &stream);
     bool canSendTcp(void) const;
+    void setCamVFP(void);
     
     // From MVFProcessor class
     void ViewFinderFrameReady(const QImage &image);
@@ -98,6 +100,7 @@ private slots:
 	void capture(void);
 	void imageCaptured(QByteArray data);
 	void camError(XQCamera::Error error);
+	void dumpCamSpecs(void);
 	
 public:
 	asuroqt(QWidget *parent = 0);

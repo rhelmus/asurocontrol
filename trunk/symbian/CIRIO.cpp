@@ -9,6 +9,7 @@
 #include <hal.h>
 #include <hal_data.h>
 
+#include "../shared/shared.h"
 #include "CIRIO.h"
 #include "asuroqt.h"
 #include "utils.h"
@@ -79,7 +80,7 @@ void CIRIO::doSendRC5(const TDesC &code)
 		if (manchester[ind] == '0')
 			burst();
 		else
-			User::AfterHighRes(9000); // +1000 for some reason?!?
+			User::AfterHighRes(4000); // +1000 for some reason?!?
 		
 		sl << QString::number((User::NTickCount()-ticks)*tperiod);
 				
@@ -96,7 +97,7 @@ void CIRIO::doSendRC5(const TDesC &code)
 
 void CIRIO::burst()
 {
-	const int amount = 121; // This seem to give a 10 msec pulse
+	const int amount = 65; // This seem to give a 5 msec pulse
 	TBuf8<amount> buf;
 	for (int i=0; i<amount; i++)
 		buf.Append(pulseCode);
@@ -168,11 +169,22 @@ void CIRIO::RunL()
 		// Something went wrong or timeout, reset
 		
 		// Timeout: check if we can do some writing in the meanwhile
-		if ((iStatus == KErrTimedOut) && writeQueue.Count())
+		if (iStatus == KErrTimedOut)
 		{
+			/*
 			doSendRC5(writeQueue[0]);
 			//asuroUI->appendLogText("Send RC5(1): " + toQString(writeQueue[0]) + "\n");
-			writeQueue.Remove(0);
+			writeQueue.Remove(0);*/
+			
+			sendIR(CMD_UPDATE, 0); // Always do as last! (call appends it to queue)
+			int count = writeQueue.Count();
+			for (int i=0; i<count; i++)
+			{
+				doSendRC5(writeQueue[i]);
+				User::AfterHighRes(50000); // Wait before next msg
+			}
+			
+			writeQueue.Reset();
 		}
 		
 		Start();			
