@@ -19,6 +19,7 @@ static struct
     unsigned long lastUpdate, toggleDriveTime;
     int8_t motorPower[2];
     int8_t mode;
+    int8_t frontLED;
 } asuroInfo;
 
 
@@ -151,6 +152,14 @@ void parseIR(char cmd, char val)
         asuroInfo.motorPower[1] = (int8_t)val;
         startDrive(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
     }
+    else if (cmd == CMD_TOGGLELED)
+    {
+        if (val == LED_FRONT)
+        {
+            asuroInfo.frontLED = (asuroInfo.frontLED == ON) ? OFF : ON;
+            FrontLED(asuroInfo.frontLED);
+        }
+    }
 }
 
 void readIR(void)
@@ -218,6 +227,7 @@ int main(void)
     asuroInfo.lastUpdate = asuroInfo.toggleDriveTime = 0;
     asuroInfo.motorPower[0] = asuroInfo.motorPower[1] = 0;
     asuroInfo.mode = MODE_IDLE;
+    asuroInfo.frontLED = OFF;
     
     while (1)
     {

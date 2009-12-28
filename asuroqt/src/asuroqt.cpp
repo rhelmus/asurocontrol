@@ -67,6 +67,7 @@ asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
     tabWidget->addTab(createControlWidget(), "Control");
     tabWidget->addTab(createMotorWidget(), "Motor control");
     tabWidget->addTab(createCamControlWidget(), "Camera control");
+    tabWidget->addTab(createLEDWidget(), "LED control");
     
     mainTabWidget->addTab(createBigCamWidget(), "Camera");
 
@@ -185,6 +186,19 @@ QWidget *asuroqt::createMotorWidget()
     connect(applyB, SIGNAL(clicked()), this, SLOT(applyMotors()));
     hbox->addWidget(applyB);
 
+    return ret;
+}
+
+QWidget *asuroqt::createLEDWidget()
+{
+    QWidget *ret = new QWidget;
+    
+    QFormLayout *form = new QFormLayout(ret);
+    
+    QPushButton *button = new QPushButton("Toggle");
+    connect(button, SIGNAL(clicked()), this, SLOT(toggleFrontLED()));
+    form->addRow("Front LED", button);
+    
     return ret;
 }
 
@@ -592,5 +606,15 @@ void asuroqt::takePicture()
 
     CTcpWriter tcpWriter(clientSocket);
     tcpWriter << QString("takepic");
+    tcpWriter.write();
+}
+
+void asuroqt::toggleFrontLED()
+{
+    if (!canSendTcp())
+        return;
+
+    CTcpWriter tcpWriter(clientSocket);
+    tcpWriter << QString("togglefrontled");
     tcpWriter.write();
 }
