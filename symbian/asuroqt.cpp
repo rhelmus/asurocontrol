@@ -321,6 +321,8 @@ void asuroqt::parseTcp(QDataStream &stream)
 		if (cameraOpen)
 			camera->d->iCameraEngine->AdjustDigitalZoom(EFalse);
 	}
+	else if (msg == "togglefrontled")
+		IRIO->sendIR(CMD_TOGGLELED, LED_FRONT);
 	else
 	{
 		// Message with qint16 data
