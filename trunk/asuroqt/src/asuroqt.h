@@ -72,6 +72,7 @@ class asuroqt: public QMainWindow
     QWidget *createBatteryWidget(void);
     QWidget *createControlWidget(void);
     QWidget *createMotorWidget(void);
+    QWidget *createLEDWidget(void);
     QWidget *createCamControlWidget(void);
     QWidget *createSmallCamWidget(void);
     QWidget *createBigCamWidget(void);
@@ -97,6 +98,7 @@ private slots:
     void zoomCameraOut(void);
     void toggleCamera(void);
     void takePicture(void);
+    void toggleFrontLED(void);
 
 public:
     asuroqt();
