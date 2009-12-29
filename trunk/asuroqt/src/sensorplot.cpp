@@ -22,11 +22,17 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLCDNumber>
+#include <QSignalMapper>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <qwt_legend.h>
 #include <qwt_plot.h>
 #include <qwt_plot_curve.h>
+#include <qwt_plot_magnifier.h>
+#include <qwt_plot_panner.h>
+#include <qwt_plot_picker.h>
+#include <qwt_plot_zoomer.h>
 #include <qwt_symbol.h>
 
 #include "sensorplot.h"
@@ -36,15 +42,90 @@ CSensorPlot::CSensorPlot(const QString &title, QWidget *parent,
 {
     QHBoxLayout *hbox = new QHBoxLayout(this);
     
-    hbox->addWidget(sensorPlot = new QwtPlot(title));
+    QWidget *plotW = new QWidget;
+    hbox->addWidget(plotW);
+    QVBoxLayout *vbox = new QVBoxLayout(plotW);
+    
+    vbox->addWidget(sensorPlot = new QwtPlot(title));
+    sensorPlot->setCanvasBackground(QColor(Qt::cyan));
     sensorPlot->setAxisTitle(QwtPlot::xBottom, "time");
     sensorPlot->setAxisTitle(QwtPlot::yLeft, "ADC");
     //sensorPlot->setAxisScale(QwtPlot::yLeft, 0.0, 1000.0);
     sensorPlot->setAxisMaxMajor(QwtPlot::yLeft, 5);
     sensorPlot->updateAxes();
 //     sensorPlot->setAxisAutoScale(QwtPlot::yLeft);
+    vbox->insertWidget(0, createPlotTools(), 0, Qt::AlignCenter);
+    
     
     hbox->addLayout(LCDLayout = new QVBoxLayout);
+}
+
+QWidget *CSensorPlot::createPlotTools()
+{
+    QFrame *ret = new QFrame;
+    ret->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    
+    QHBoxLayout *hbox = new QHBoxLayout(ret);
+    
+    QSignalMapper *signalmapper = new QSignalMapper(this);
+    connect(signalmapper, SIGNAL(mapped(const QString &)), this,
+            SLOT(toolToggled(const QString &)));
+    
+    // Zoomer
+    zoomer = new QwtPlotZoomer(QwtPlot::xBottom, QwtPlot::yLeft,
+                               sensorPlot->canvas());
+    QToolButton *button = createToolButton("Zoom");
+    hbox->addWidget(button);
+    connect(button, SIGNAL(toggled(bool)), signalmapper, SLOT(map()));
+    signalmapper->setMapping(button, "zoomer");
+    button->setChecked(false);
+    
+    // Panner
+    panner = new QwtPlotPanner(sensorPlot->canvas());
+    panner->setMouseButton(Qt::MidButton);
+    hbox->addWidget(button = createToolButton("Panner"));
+    connect(button, SIGNAL(toggled(bool)), signalmapper, SLOT(map()));
+    signalmapper->setMapping(button, "panner");
+    button->setChecked(true);
+
+    // Picker
+    picker = new QwtPlotPicker(sensorPlot->canvas());
+    picker->setRubberBand(QwtPicker::CrossRubberBand);
+    picker->setTrackerMode(QwtPicker::AlwaysOn);
+    picker->setSelectionFlags(QwtPicker::PointSelection | QwtPicker::DragSelection);
+    hbox->addWidget(button = createToolButton("Picker"));
+    connect(button, SIGNAL(toggled(bool)), signalmapper, SLOT(map()));
+    signalmapper->setMapping(button, "picker");
+    button->setChecked(true);
+
+    // Magnifier
+    magnifier = new QwtPlotMagnifier(sensorPlot->canvas());
+    hbox->addWidget(button = createToolButton("Magnifier"));
+    connect(button, SIGNAL(toggled(bool)), signalmapper, SLOT(map()));
+    signalmapper->setMapping(button, "magnifier");
+    button->setChecked(true);
+
+    return ret;
+}
+
+QToolButton *CSensorPlot::createToolButton(const QString &text)
+{
+    QToolButton *ret = new QToolButton;
+    ret->setText(text);
+    ret->setCheckable(true);
+    return ret;
+}
+
+void CSensorPlot::toolToggled(const QString &name)
+{
+    if (name == "zoomer")
+        zoomer->setEnabled(!zoomer->isEnabled());
+    else if (name == "panner")
+        zoomer->setEnabled(!panner->isEnabled());
+    else if (name == "picker")
+        zoomer->setEnabled(!picker->isEnabled());
+    else if (name == "magnifier")
+        zoomer->setEnabled(!magnifier->isEnabled());
 }
 
 void CSensorPlot::addSensor(const std::string &name, const QColor &color)
