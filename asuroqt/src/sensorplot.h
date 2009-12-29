@@ -28,13 +28,20 @@
 #include <QWidget>
 
 class QLCDNumber;
+class QToolButton;
 class QVBoxLayout;
 
 class QwtPlot;
 class QwtPlotCurve;
+class QwtPlotMagnifier;
+class QwtPlotPanner;
+class QwtPlotPicker;
+class QwtPlotZoomer;
 
 class CSensorPlot: public QWidget
 {
+    Q_OBJECT
+    
     struct SSensor
     {
         QwtPlotCurve *sensorCurve;
@@ -48,8 +55,18 @@ class CSensorPlot: public QWidget
     TSensorMap sensorMap;
 
     QwtPlot *sensorPlot;
+    QwtPlotMagnifier *magnifier;
+    QwtPlotPanner *panner;
+    QwtPlotPicker *picker;
+    QwtPlotZoomer *zoomer;
     QVBoxLayout *LCDLayout;
+    
+    QWidget *createPlotTools(void);
+    QToolButton *createToolButton(const QString &text);
 
+private slots:
+    void toolToggled(const QString &name);
+    
 public:
     CSensorPlot(const QString &title, QWidget *parent = 0, Qt::WindowFlags f = 0);
 

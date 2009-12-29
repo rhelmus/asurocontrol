@@ -119,6 +119,9 @@ QWidget *asuroqt::createLineWidget()
     linePlot->addSensor("Right", Qt::yellow);
 
     hbox->addWidget(linePlot);
+    
+    for (int i=0; i<25; i++)
+        linePlot->addData("Left", i*2.5);
 
     return ret;
 }
