@@ -44,7 +44,7 @@ asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
     mainTabWidget->addTab(w, "Main");
     QVBoxLayout *vbox = new QVBoxLayout(w);
 
-    vbox->addWidget(createSwitchWidget());
+//    vbox->addWidget(createSwitchWidget());
 
     QSplitter *splitter = new QSplitter(Qt::Vertical);
     vbox->addWidget(splitter);
@@ -55,6 +55,7 @@ asuroqt::asuroqt() : clientSocket(0), tcpReadBlockSize(0)
     tabWidget->addTab(createLineWidget(), "Line sensors");
     tabWidget->addTab(createOdoWidget(), "Odo sensors");
     tabWidget->addTab(createBatteryWidget(), "Battery");
+    tabWidget->addTab(createSwitchWidget(), "Touch sensors");
 
     
     QSplitter *subsplit = new QSplitter(Qt::Horizontal);
@@ -332,6 +333,7 @@ QWidget *asuroqt::createKnob(const QString &title, QwtKnob *&knob)
     knob->setScale(0.0, 255.0, 51.0);
     knob->setRange(0.0, 255.0, 25.5);
     knob->setTracking(false);
+    knob->setKnobWidth(40);
     
     return ret;
 }
