@@ -29,6 +29,7 @@
 ****************************************************************************/
 
 #include <QCoreApplication>
+#include <QDialogButtonBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -103,6 +104,7 @@ void asuroqt::createUI()
 	setMenuBar(menuBar);
 	
 	connectAction = menuBar->addAction("Connect", this, SLOT(connectToServer()));
+	menuBar->addAction("Connect to ip", this, SLOT(connectToServerIp()));
 	menuBar->addAction("Disconnect", this, SLOT(disonnectFromServer()));
 	
 	// UNDONE: Needed?
@@ -401,6 +403,35 @@ void asuroqt::connectToServer()
 	connectAction->setEnabled(false);
 	tcpSocket->abort();
 	tcpSocket->connectToHost("192.168.1.40", 40000);
+}
+
+void asuroqt::connectToServerIp()
+{
+	QDialog dialog(this);
+	dialog.setModal(true);
+	
+	QVBoxLayout *vbox = new QVBoxLayout(&dialog);
+	
+	QLabel *label = new QLabel("IP address");
+	vbox->addWidget(label);
+	
+	QLineEdit *ipedit = new QLineEdit("192.168.1.40");
+	ipedit->setInputMask("000.000.000.000;_");
+	vbox->addWidget(ipedit);
+	
+	QDialogButtonBox *bbox = new QDialogButtonBox(QDialogButtonBox::Ok |
+	            QDialogButtonBox::Cancel);
+	connect(bbox, SIGNAL(accepted()), &dialog, SLOT(accept()));
+	connect(bbox, SIGNAL(rejected()), &dialog, SLOT(reject()));
+	vbox->addWidget(bbox);
+	
+	
+	if (dialog.exec() == QDialog::Accepted)
+	{
+		connectAction->setEnabled(false);
+		tcpSocket->abort();
+		tcpSocket->connectToHost(ipedit->text(), 40000);
+	}
 }
 
 void asuroqt::disconnectFromServer()

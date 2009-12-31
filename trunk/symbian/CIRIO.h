@@ -47,6 +47,7 @@ class CIRIO: public CActive
 	TBuf<8> readByte;
 	RArray<TBuf<14> > writeQueue;
 	char pulseCode;
+	bool sendUpdate;
 	
 	void doRead(void);
 	void doSendRC5(const TDesC &code);

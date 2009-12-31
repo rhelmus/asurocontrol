@@ -90,6 +90,7 @@ class asuroqt : public QMainWindow, MVFProcessor
 private slots:
 	void sendDummyIR(void);
 	void connectToServer(void);
+	void connectToServerIp(void);
 	void disconnectFromServer(void);
 	void serverHasData(void);
 	void socketError(QAbstractSocket::SocketError socketError);

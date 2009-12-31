@@ -15,7 +15,7 @@
 #include "utils.h"
 
 CIRIO::CIRIO(asuroqt *owner) : CActive(CActive::EPriorityStandard), SIRState(SIR_IDLE), asuroUI(owner), writeQueue(10),
-							   pulseCode(0x5B)
+							   pulseCode(0x5B), sendUpdate(true)
 {
 	CActiveScheduler::Add(this);
 }
@@ -30,7 +30,7 @@ CIRIO::~CIRIO()
 
 void CIRIO::doRead()
 {
-	const TInt timeout = 500000; // 0.5s
+	const TInt timeout = 150000; // 0.15s
 	commPort.Read(iStatus, timeout, readBuffer, 1);
 	if (!IsActive())
 		SetActive();
@@ -176,12 +176,16 @@ void CIRIO::RunL()
 			//asuroUI->appendLogText("Send RC5(1): " + toQString(writeQueue[0]) + "\n");
 			writeQueue.Remove(0);*/
 			
-			sendIR(CMD_UPDATE, 0); // Always do as last! (call appends it to queue)
+			if (sendUpdate)
+				sendIR(CMD_UPDATE, 0); // Always do as last! (call appends it to queue)
+			
+			sendUpdate = !sendUpdate; // Only update half of the time
+			
 			int count = writeQueue.Count();
 			for (int i=0; i<count; i++)
 			{
 				doSendRC5(writeQueue[i]);
-				User::AfterHighRes(50000); // Wait before next msg
+				User::AfterHighRes(35000); // Wait before next msg
 			}
 			
 			writeQueue.Reset();
