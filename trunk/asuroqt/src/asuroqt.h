@@ -60,6 +60,7 @@ class asuroqt: public QMainWindow
     CSensorPlot *linePlot, *odoPlot, *batteryPlot;
     CCamWidget *cameraWidget, *smallCameraWidget;
     QwtKnob *leftMotorKnob, *rightMotorKnob, *controlSpeedKnob;
+    QCheckBox *motorBackwards;
     CControlWidget *controlWidget;
     QwtSlider *controlLSlider, *controlRSlider;
     QSpinBox *camFrameSpinBox, *camAngleSpinBox;

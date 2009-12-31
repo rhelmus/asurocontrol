@@ -178,16 +178,18 @@ QWidget *asuroqt::createMotorWidget()
     
     QHBoxLayout *hbox = new QHBoxLayout(ret);
 
-    QVBoxLayout *vbox = new QVBoxLayout;
-    hbox->addLayout(vbox);
-
     hbox->addWidget(createKnob("<qt><strong>Left</strong>", leftMotorKnob));
     hbox->addWidget(createKnob("<qt><strong>Right</strong>", rightMotorKnob));
 
+    QVBoxLayout *vbox = new QVBoxLayout;
+    hbox->addLayout(vbox);
+    
+    vbox->addWidget(motorBackwards = new QCheckBox("Backwards"));
+    
     QPushButton *applyB = new QPushButton("Apply");
     applyB->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(applyB, SIGNAL(clicked()), this, SLOT(applyMotors()));
-    hbox->addWidget(applyB);
+    vbox->addWidget(applyB);
 
     return ret;
 }
@@ -504,23 +506,20 @@ void asuroqt::controlAsuro()
 
     if (forward && back)
         ; // Reset speed
-    else if (forward)
+    else if (forward || back)
     {
         if (left)
-            leftspeed = movespeed;
-        else if (right)
             rightspeed = movespeed;
+        else if (right)
+            leftspeed = movespeed;
         else // both or neither
             leftspeed = rightspeed = movespeed;
-    }
-    else if (back)
-    {
-        if (left)
-            rightspeed = -movespeed;
-        else if (right)
-            leftspeed = -movespeed;
-        else // both or neither
-            leftspeed = rightspeed = -movespeed;
+        
+        if (back)
+        {
+            leftspeed = -leftspeed;
+            rightspeed = -rightspeed;
+        }
     }
 
     qDebug() << "Apply: " << leftspeed << ", " << rightspeed << " - " << forward << back << left << right << "\n";
@@ -534,10 +533,18 @@ void asuroqt::controlAsuro()
 
 void asuroqt::applyMotors()
 {
-    qDebug() << "Apply: " << leftMotorKnob->value() << ", " << rightMotorKnob->value() << "\n";
+    qint16 left = leftMotorKnob->value(), right = rightMotorKnob->value();
     
-    writeTcpMsg("leftm", static_cast<qint16>(leftMotorKnob->value()));
-    writeTcpMsg("rightm", static_cast<qint16>(rightMotorKnob->value()));
+    if (motorBackwards->isChecked())
+    {
+        left = -left;
+        right = -right;
+    }
+    
+    qDebug() << "Apply: " << left << ", " << right << "\n";
+    
+    writeTcpMsg("leftm", left);
+    writeTcpMsg("rightm", right);
 }
 
 void asuroqt::applyCameraControl()
