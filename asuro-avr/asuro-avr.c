@@ -12,16 +12,20 @@
 #define MODE_IDLE        0 /* Doing nothing */
 #define MODE_SLEEP       1 /* Set when waiting no status update for a while */
 #define MODE_DRIVE       2 /* Driving */
-#define MODE_DRIVE_PAUSE 3 /* Pause while driving (to regain power) */
 
 static struct
 {
-    unsigned long lastUpdate, toggleDriveTime;
+    unsigned long lastUpdate;
     int8_t motorPower[2];
     int8_t mode;
-    int8_t frontLED;
+    int8_t LEDsEnabled;
 } asuroInfo;
 
+void setBackLEDs(void)
+{
+    BackLED((asuroInfo.LEDsEnabled & (1<<LED_BACK_LEFT)) ? ON : OFF,
+            (asuroInfo.LEDsEnabled & (1<<LED_BACK_RIGHT)) ? ON : OFF);
+}
 
 // Own version of SetMotorPower: FREE instead of BREAK at 0 speed
 void setMotorSpeed(int8_t left, int8_t right)
@@ -50,6 +54,18 @@ void setMotorSpeed(int8_t left, int8_t right)
     
     MotorDir(ldir, rdir);
     MotorSpeed(left * 2, right * 2);
+    
+    if (ldir == RWD)
+        asuroInfo.LEDsEnabled |= (1<<LED_BACK_LEFT);
+    else
+        asuroInfo.LEDsEnabled &= ~(1<<LED_BACK_LEFT);
+    
+    if (rdir == RWD)
+        asuroInfo.LEDsEnabled |= (1<<LED_BACK_RIGHT);
+    else
+        asuroInfo.LEDsEnabled &= ~(1<<LED_BACK_RIGHT);
+    
+    setBackLEDs();
 }
 
 void setIdle(void)
@@ -68,14 +84,6 @@ void startDrive(int8_t left, int8_t right)
 {
     setMotorSpeed(left, right);
     asuroInfo.mode = MODE_DRIVE;
-    asuroInfo.toggleDriveTime = Gettime();
-}
-
-void pauseDrive(void)
-{
-    setMotorSpeed(0, 0);
-    asuroInfo.mode = MODE_DRIVE_PAUSE;
-    asuroInfo.toggleDriveTime = Gettime();
 }
 
 void sendIRByte(unsigned char byte)
@@ -124,10 +132,11 @@ void sendSensors(void)
     sendIRByte('O'); // Odo
     sendIRByte(adc[0]*sendmax/adcmax);
     sendIRByte(adc[1]*sendmax/adcmax);
+    setBackLEDs(); // Restore backleds (odo read switches them off)
     
     // Battery
     sendIRByte('B'); // Battery
-    sendIRByte(Battery()*sendmax/adcmax);    
+    sendIRByte(Battery()*sendmax/adcmax);
 }
 
 void parseIR(char cmd, char val)
@@ -144,11 +153,12 @@ void parseIR(char cmd, char val)
             startDrive(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
     }
     else if (cmd == CMD_SPEEDL)
+    {
         asuroInfo.motorPower[0] = (int8_t)val;
+        startDrive(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
+    }
     else if (cmd == CMD_SPEEDR)
     {
-        // NOTE: Motor is currently only set with right speed
-        // cmd (as msg's are usually paired)
         asuroInfo.motorPower[1] = (int8_t)val;
         startDrive(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
     }
@@ -156,9 +166,9 @@ void parseIR(char cmd, char val)
     {
         if (val == LED_FRONT)
         {
-            asuroInfo.frontLED = (asuroInfo.frontLED == ON) ? OFF : ON;
-            FrontLED(asuroInfo.frontLED);
-        }
+            asuroInfo.LEDsEnabled ^= (1<<LED_FRONT);
+            FrontLED(asuroInfo.LEDsEnabled & LED_FRONT);
+        }        
     }
 }
 
@@ -224,10 +234,10 @@ int main(void)
     StatusLED(RED);
     BackLED(OFF, OFF);
     
-    asuroInfo.lastUpdate = asuroInfo.toggleDriveTime = 0;
+    asuroInfo.lastUpdate = 0;
     asuroInfo.motorPower[0] = asuroInfo.motorPower[1] = 0;
     asuroInfo.mode = MODE_IDLE;
-    asuroInfo.frontLED = OFF;
+    asuroInfo.LEDsEnabled = 0;
     
     while (1)
     {
@@ -239,24 +249,15 @@ int main(void)
             case MODE_SLEEP:
                 break;
             case MODE_DRIVE:
-//                 if ((Gettime() - asuroInfo.toggleDriveTime) > 1500)
-//                     pauseDrive();
-//                 else
+                timediff = (Gettime() - asuroInfo.lastUpdate);
+                
+                if (timediff > 40000) // No contact for over 40s
+                    setIdle();
+                else if (timediff > 5000)
                 {
-                    timediff = (Gettime() - asuroInfo.lastUpdate);
-                    
-                    if (timediff > 40000) // No contact for over 40s
-                        setIdle();
-                    else if (timediff > 5000)
-                    {
-                        setSleep();
-                        Msleep(500); // Wait a little to regain power
-                    }
+                    setSleep();
+                    Msleep(500); // Wait a little to regain power
                 }                
-                break;
-            case MODE_DRIVE_PAUSE:
-                if ((Gettime() - asuroInfo.toggleDriveTime) > 500)
-                    startDrive(asuroInfo.motorPower[0], asuroInfo.motorPower[1]);
                 break;
         }
     }
